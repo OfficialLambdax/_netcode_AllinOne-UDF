@@ -1,5 +1,5 @@
 # _netcode_AllinOne-UDF
-The whole _netcode UDF in one file
+The whole _netcode UDF including its requirements in one file
 
 Created in this order
 - _netcode_Relay
