@@ -216,7 +216,7 @@ EndFunc
 
 #ce
 
-Global $__net_Proxy_sAddonVersion = "0.2.3"
+Global $__net_Proxy_sAddonVersion = "0.2.3.1"
 Global Const $__net_Proxy_sNetcodeOfficialRepositoryURL = "https://github.com/OfficialLambdax/_netcode_Proxy-UDF"
 Global Const $__net_Proxy_sNetcodeOfficialRepositoryChangelogURL = "https://github.com/OfficialLambdax/_netcode_Proxy-UDF/blob/main/%23changelog%20proxy.txt"
 Global Const $__net_Proxy_sNetcodeVersionURL = "https://raw.githubusercontent.com/OfficialLambdax/_netcode-UDF/main/versions/_netcode_Proxy.version"
