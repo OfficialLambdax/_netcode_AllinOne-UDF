@@ -9481,8 +9481,6 @@ __netcode_UDFVersionCheck($__net_Addon_sNetcodeVersionURL, $__net_Addon_sNetcode
 		_storageOL_CreateGroup($nID)
 		_storageGO_CreateGroup($nID)
 
-;~ 		Local $arSockets[0]
-;~ 		_storageGO_Overwrite($nID, '_netcode_Addon_SocketList', $arSockets)
 	EndFunc
 
 	; disconnects all sockets and cleans the vars
@@ -10541,18 +10539,22 @@ __netcode_UDFVersionCheck($__net_Addon_sNetcodeVersionURL, $__net_Addon_sNetcode
 
 #EndRegion
 
-Global $__storageS_sVersion = "0.1.3"
+Global $__storageS_sVersion = "0.1.3.3"
 Global $__storageS_O_Dictionaries = ObjCreate("Scripting.Dictionary")
 Global $__storageS_OL_Dictionaries = ObjCreate("Scripting.Dictionary")
+Global $__storageS_ALR_Array[1e6]
+Global $__storageS_ALR_Index = 0
 Global $__storageS_GO_PosObject = ObjCreate("Scripting.Dictionary")
 Global $__storageS_GO_IndexObject = ObjCreate("Scripting.Dictionary")
 Global $__storageS_GO_GroupObject = ObjCreate("Scripting.Dictionary")
 Global $__storageS_GO_Size = 0
 
 __storageGO_Startup()
+__storageAL_Startup()
+__storageALRx_Startup()
 
 
-#Region Assign / Eval Method
+#Region _storageG 		Assign / Eval Method
 ; ===============================================================================================================================
 ; ===============================================================================================================================
 ; #FUNCTION# ====================================================================================================================
@@ -10764,7 +10766,7 @@ EndFunc
 #EndRegion
 
 
-#Region Reuse Assign / Eval Method
+#Region _storageGO		Reuse Assign / Eval Method
 ; ===============================================================================================================================
 ; ===============================================================================================================================
 ; #FUNCTION# ====================================================================================================================
@@ -11119,7 +11121,7 @@ EndFunc
 #EndRegion
 
 
-#Region DictObj method
+#Region _storageO		DictObj method
 ; ===============================================================================================================================
 ; ===============================================================================================================================
 ; #FUNCTION# ====================================================================================================================
@@ -11318,7 +11320,7 @@ EndFunc
 #EndRegion
 
 
-#Region DictObj List method
+#Region _storageOL		DictObj List method
 ; ===============================================================================================================================
 ; ===============================================================================================================================
 ; #FUNCTION# ====================================================================================================================
@@ -11489,6 +11491,227 @@ EndFunc
 #EndRegion
 
 
+#Region _storageAL		Array List method
+; ===============================================================================================================================
+; ===============================================================================================================================
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageAL_CreateGroup
+; Description ...: Creates a Element Group
+; Syntax ........: _storageAL_CreateGroup($vElementGroup)
+; Parameters ....: $vElementGroup       - a variant value.
+; Return values .: True					= If success
+;                : False				= If the group already exists
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageAL_CreateGroup($vElementGroup)
+
+	If IsArray(_storageGO_Read('_storageAL', $vElementGroup)) Then Return False
+
+	Local $arElemenGroup[0]
+	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElemenGroup)
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageAL_AddElement
+; Description ...: Adds a Element to the given Group
+; Syntax ........: _storageAL_AddElement($vElementGroup, $sElementName)
+; Parameters ....: $vElementGroup       - a variant value.
+;                  $sElementName        - a string value.
+; Return values .: True					= If success
+;                : False				= If the Group is unknown
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageAL_AddElement($vElementGroup, $sElementName)
+
+	Local $arElemenGroup = _storageGO_Read('_storageAL', $vElementGroup)
+	If Not IsArray($arElemenGroup) Then Return False
+
+	Local $nArSize = UBound($arElemenGroup)
+	ReDim $arElemenGroup[$nArSize + 1]
+	$arElemenGroup[$nArSize] = $sElementName
+
+	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElemenGroup)
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageAL_GetElements
+; Description ...: Returns all Elements of the given group in a 1D Array
+; Syntax ........: _storageAL_GetElements($vElementGroup)
+; Parameters ....: $vElementGroup       - a variant value.
+; Return values .: Array				= Containing all Elements of the group, starting at [0]
+;                : False				= If the Group is unknown
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageAL_GetElements($vElementGroup)
+
+	Return _storageGO_Read('_storageAL', $vElementGroup)
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageAL_Exists
+; Description ...: Checks if the given Element exists for the given group
+; Syntax ........: _storageAL_Exists($vElementGroup, $sElementName)
+; Parameters ....: $vElementGroup       - a variant value.
+;                  $sElementName        - a string value.
+; Return values .: True					= Element exists
+;                : False				= Element does not exists
+; Errors ........: 1					= Group is unknown
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageAL_Exists($vElementGroup, $sElementName)
+
+	Local $arElemenGroup = _storageGO_Read('_storageAL', $vElementGroup)
+	If Not IsArray($arElemenGroup) Then Return SetError(1, 0, False)
+
+	For $i = 0 To UBound($arElemenGroup) - 1
+		if $arElemenGroup[$i] == $sElementName Then Return True
+	Next
+
+	Return False
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageAL_RemoveElement
+; Description ...: Removes the given Element from the given Group
+; Syntax ........: _storageAL_RemoveElement($vElementGroup, $sElementName)
+; Parameters ....: $vElementGroup       - a variant value.
+;                  $sElementName        - a string value.
+; Return values .: True					= If success
+;                : False				= If not
+; Errors ........: 1					= Group is unknown
+;                : 2					= Element is unknown
+; Modified ......:
+; Remarks .......:
+; ===============================================================================================================================
+Func _storageAL_RemoveElement($vElementGroup, $sElementName)
+
+	Local $arElemenGroup = _storageGO_Read('_storageAL', $vElementGroup)
+	If Not IsArray($arElemenGroup) Then Return SetError(1, 0, False)
+
+	Local $nArSize = UBound($arElemenGroup) - 1, $nIndex = -1
+	For $i = 0 To $nArSize
+		If $arElemenGroup[$i] == $sElementName Then
+			$nIndex = $i
+			ExitLoop
+		EndIf
+	Next
+
+	If $nIndex == -1 Then Return SetError(2, 9, False)
+
+	$arElemenGroup[$nIndex] = $arElemenGroup[$nArSize]
+	ReDim $arElemenGroup[$nArSize]
+
+	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElemenGroup)
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageAl_DestroyGroup
+; Description ...: Destroys the entire Group and its elements.
+; Syntax ........: _storageAl_DestroyGroup($vElementGroup)
+; Parameters ....: $vElementGroup       - a variant value.
+; Return values .: True					= If success
+;                : False				= Group is unknown
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageAl_DestroyGroup($vElementGroup)
+
+	Local $arElemenGroup = _storageGO_Read('_storageAL', $vElementGroup)
+	If Not IsArray($arElemenGroup) Then Return False
+
+	Return _storageGO_DestroyVar('_storageAL', $vElementGroup)
+
+EndFunc
+#EndRegion
+
+
+#Region _storageALR		Array List Rapid Add
+; ===============================================================================================================================
+; ===============================================================================================================================
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageALR_AddElement
+; Description ...: Adds a Element
+; Syntax ........: _storageALR_AddElement($sElementName)
+; Parameters ....: $sElementName        - a string value.
+; Return values .: None
+; Modified ......:
+; Remarks .......: Works with a Single Global Array. So its not possible to write elements to a group. Thats what ALRapidX is for.
+; Example .......: No
+; ===============================================================================================================================
+Func _storageALR_AddElement($sElementName)
+
+	Local $nArSize = UBound($__storageS_ALR_Array)
+	If $__storageS_ALR_Index = $nArSize Then ReDim $__storageS_ALR_Array[$nArSize + 1e6]
+
+	$__storageS_ALR_Array[$__storageS_ALR_Index] = $sElementName
+	$__storageS_ALR_Index += 1
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageALR_ConvertToAL
+; Description ...: Converts the ALR Array to a AL array
+; Syntax ........: _storageALR_ConvertToAL($vElementGroup)
+; Parameters ....: $vElementGroup       - a variant value.
+; Return values .: True					= If success
+;                : False				= The group already exists
+; Modified ......:
+; Remarks .......: Once you finished adding all the elements, you call this function to create the AL Group.
+; Example .......: No
+; ===============================================================================================================================
+Func _storageALR_ConvertToAL($vElementGroup)
+
+	If IsArray(_storageGO_Read('_storageAL', $vElementGroup)) Then Return False
+
+	Local $arElemenGroup = $__storageS_ALR_Array
+	ReDim $arElemenGroup[$__storageS_ALR_Index]
+
+	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElemenGroup)
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageALR_Destroy
+; Description ...: Resets the global array
+; Syntax ........: _storageALR_Destroy()
+; Parameters ....: None
+; Return values .: None
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageALR_Destroy()
+
+	Local $arElemenGroup[1e6]
+	$__storageS_ALR_Array = $arElemenGroup
+	$__storageS_ALR_Index = 0
+
+EndFunc
+#EndRegion
+
+
+#Region Miscellaneous Functions
 ; #FUNCTION# ====================================================================================================================
 ; Name ..........: _storageS_GetVarSize
 ; Description ...: Returns the Size of the given Variable
@@ -11547,39 +11770,125 @@ Func _storageS_GetVarSize($vData)
 
 	EndSwitch
 EndFunc
+#EndRegion
+
 
 ; New Methods that require testing and optimization
 ; ===============================================================================================================================
 ; ===============================================================================================================================
 ; ===============================================================================================================================
 
-Func _storageML_Startup()
+
+#Region _storageGORB	WIP Ring Buffer
+Func _storageGORB_CreateGroup($sRingName, $nRingElementCount)
+
+	$sRingName = '_storageGORB' & $sRingName
+
+	If Not _storageGO_CreateGroup($sRingName) Then Return False
+
+	; claim required storages
+	For $i = 1 To $nRingElementCount
+		_storageGO_Overwrite($sRingName, $i, Null)
+	Next
+
+	; store information
+	_storageGO_Overwrite($sRingName, 'Size', $nRingElementCount)
+	_storageGO_Overwrite($sRingName, 'Pos', 1)
+
+	Return True
 
 EndFunc
 
-Func _storageML_CreateGroup($vElementGroup)
+Func _storageGORB_Add($sRingName, $vElementData)
+
+	$sRingName = '_storageGORB' & $sRingName
+	Local $nSize = _storageGO_Read($sRingName, 'Size')
+	If $nSize == False Then Return False
+
+	Local $nPos = _storageGO_Read($sRingName, 'Pos')
+	If $nPos == $nSize Then $nPos = 1
+
+	_storageGO_Overwrite($sRingName, $nPos, $vElementData)
+	Return _storageGO_Overwrite($sRingName, 'Pos', $nSize)
 
 EndFunc
 
-Func _storageML_AddElement($vElementGroup, $sElementName)
+Func _storageGORB_Get($sRingName)
+
+	$sRingName = '_storageGORB' & $sRingName
+
 
 EndFunc
 
-Func _storageML_GetElements($vElementGroup)
+Func _storageGORB_GetInfo($sRingName)
 
 EndFunc
 
-Func _storageML_Exists($vElementGroup, $sElementName)
+Func _storageGORB_DestroyGroup($sRingName)
+
+EndFunc
+#EndRegion
+
+
+#Region _storageALRx	WIP ALRapidX
+Func _storageALRx_CreateGroup($vElementGroup)
+
+	If IsArray(_storageGO_Read('_storageALRx', $vElementGroup)) Then Return False
+
+	Local $arElementGroup[1e6]
+	_storageGO_Overwrite('_storageALRx', $vElementGroup, $arElementGroup)
+	_storageGO_Overwrite('_storageALRx', $vElementGroup & 'Index', 0)
+
+	Return True
 
 EndFunc
 
-Func _storageML_RemoveElement($vElementGroup, $sElementName)
+Func _storageALRx_AddElement($vElementGroup, $sElementName)
+
+	Local $arElemenGroup = _storageGO_Read('_storageALRx', $vElementGroup)
+	If Not IsArray($arElemenGroup) Then Return False
+
+	Local $nArSize = UBound($arElemenGroup)
+	Local $nIndex = _storageGO_Read('_storageALRx', $vElementGroup & 'Index')
+
+	If $nIndex = $nArSize Then ReDim $arElemenGroup[$nArSize + 1e6]
+
+	$arElemenGroup[$nIndex] = $sElementName
+
+	_storageGO_Overwrite('_storageALRx', $vElementGroup, $arElemenGroup)
+	Return _storageGO_Overwrite('_storageALRx', $vElementGroup & 'Index', $nIndex + 1)
 
 EndFunc
 
-Func _storageML_DestroyGroup($vElementGroup)
+Func _storageALRx_ConvertToAL($vElementGroup, $vToElementGroup)
+
+	Local $arElemenGroup = _storageGO_Read('_storageALRx', $vElementGroup)
+	If Not IsArray($arElemenGroup) Then Return False
+
+	If IsArray(_storageGO_Read('_storageAL', $vElementGroup)) Then Return False
+
+	Local $nIndex = _storageGO_Read('_storageALRx', $vElementGroup & 'Index')
+	ReDim $arElemenGroup[$nIndex]
+
+	Return _storageGO_Overwrite('_storageAL', $vToElementGroup, $arElemenGroup)
+EndFunc
+
+Func _storageALRx_Destroy($vElementGroup)
+
+	Local $arElemenGroup = _storageGO_Read('_storageALRx', $vElementGroup)
+	If Not IsArray($arElemenGroup) Then Return False
+
+	_storageGO_DestroyVar('_storageALRx', $vElementGroup)
+	_storageGO_DestroyVar('_storageALRx', $vElementGroup & 'Index')
+
+	Return True
 
 EndFunc
+
+Func __storageALRx_Startup()
+	_storageGO_CreateGroup('_storageALRx')
+EndFunc
+#EndRegion
 
 
 ; Internal Barrier
@@ -11623,12 +11932,16 @@ Func __storageGO_Startup()
 
 EndFunc
 
+Func __storageAL_Startup()
+	_storageGO_CreateGroup('_storageAL')
+EndFunc
+
 Func __storageGO_AddGroupVar($vElementGroup, $sElementName)
 	If Not $__storageS_GO_GroupObject.Exists('g' & $vElementGroup) Then Return False
 	$oGroupVars = $__storageS_GO_GroupObject('g' & $vElementGroup)
 
 	$oGroupVars(String($sElementName))
-	$__storageS_GO_GroupObject($vElementGroup) = $oGroupVars
+	$__storageS_GO_GroupObject('g' & $vElementGroup) = $oGroupVars
 	Return True
 EndFunc
 
