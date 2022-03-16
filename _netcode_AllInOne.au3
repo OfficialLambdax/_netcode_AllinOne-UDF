@@ -9429,7 +9429,7 @@ Global $__net_Addon_bRelayLogToConsole = True
 Global $__net_Addon_bProxyLogToConsole = True
 Global $__net_Addon_bRouterLogToConsole = True
 
-Global Const $__net_Addon_sAddonVersion = "0.1.2.9"
+Global Const $__net_Addon_sAddonVersion = "0.1.2.10"
 Global Const $__net_Addon_sNetcodeTestedVersion = "0.1.5.27"
 Global Const $__net_Addon_sNetcodeOfficialRepositoryURL = "https://github.com/OfficialLambdax/_netcode_AddonCore-UDF"
 Global Const $__net_Addon_sNetcodeOfficialRepositoryChangelogURL = "https://github.com/OfficialLambdax/_netcode_AddonCore-UDF/blob/main/%23changelog%20AddonCore.txt"
@@ -10161,8 +10161,8 @@ __netcode_UDFVersionCheck($__net_Addon_sNetcodeVersionURL, $__net_Addon_sNetcode
 			__netcode_Addon_AddToOutgoingSocketList($hSocket, $hOutgoingSocket)
 
 			; inherit between and disconnect middleman ids from incoming socket
-			__netcode_Addon_SetVar($hOutgoingSocket, 'Between', __netcode_Addon_GetVar($hOutgoingSocket, 'Between'))
-			__netcode_Addon_SetVar($hOutgoingSocket, 'Disconnect', __netcode_Addon_GetVar($hOutgoingSocket, 'Disconnect'))
+			__netcode_Addon_SetVar($hOutgoingSocket, 'Between', __netcode_Addon_GetVar($hIncomingSocket, 'Between'))
+			__netcode_Addon_SetVar($hOutgoingSocket, 'Disconnect', __netcode_Addon_GetVar($hIncomingSocket, 'Disconnect'))
 
 			; if there are more elements
 			If $nArSize > 2 Then
@@ -10548,252 +10548,113 @@ __netcode_UDFVersionCheck($__net_Addon_sNetcodeVersionURL, $__net_Addon_sNetcode
 
 #EndRegion
 
-Global Const $__storageS_sVersion = "0.1.5.3"
-Global $__storageS_O_Dictionaries = ObjCreate("Scripting.Dictionary")
-Global $__storageS_OL_Dictionaries = ObjCreate("Scripting.Dictionary")
-Global $__storageS_ALR_Array[1e6]
-Global $__storageS_ALR_Index = 0
-Global $__storageS_GO_PosObject = ObjCreate("Scripting.Dictionary")
-Global $__storageS_GO_IndexObject = ObjCreate("Scripting.Dictionary")
-Global $__storageS_GO_GroupObject = ObjCreate("Scripting.Dictionary")
-Global $__storageS_GO_Size = 0
-Global $__storageS_RBx_Array = False
-Global $__storageS_RBx_WritePos = False
-Global $__storageS_RBx_ReadPos = False
-Global $__storageS_AO_StorageArray = False
-Global $__storageS_AO_PosObject = ObjCreate("Scripting.Dictionary")
-Global $__storageS_AO_IndexObject = ObjCreate("Scripting.Dictionary")
-Global $__storageS_AO_GroupObject = ObjCreate("Scripting.Dictionary")
-Global $__storageS_AO_Size = 0
-Global $__storageS_ML_Maps = False
+#Region Init
+Global Const $__storageS_sVersion = "0.2.1"
+Global $__storageS_O_Dictionaries = ObjCreate("Scripting.Dictionary") ; holds all storages
+Global $__storageS_OL_Dictionaries = ObjCreate("Scripting.Dictionary") ; holds all lists
+Global $__storageS_ALR_Array[1e6] ; ALRapid works on a single array
+Global $__storageS_ALR_Index = 0 ; latest element
+Global $__storageS_GO_PosObject = ObjCreate("Scripting.Dictionary") ; holds the positions for each go storage
+Global $__storageS_GO_IndexObject = ObjCreate("Scripting.Dictionary") ; holds all free storages
+Global $__storageS_GO_GroupObject = ObjCreate("Scripting.Dictionary") ; holds all groups
+Global $__storageS_GO_Size = 0 ; the current size of the GO storage. Can never decrease
+Global $__storageS_GM_PosMap[]
+Global $__storageS_GM_IndexMap[]
+Global $__storageS_GM_Size = 0
+Global $__storageS_RBx_Array = False ; RBx works on a single array
+Global $__storageS_RBx_WritePos = False ; holds the write pos
+Global $__storageS_RBx_ReadPos = False ; holds the read pos
+Global $__storageS_AO_StorageArray = False ; AO works on a single array
+Global $__storageS_AO_PosObject = ObjCreate("Scripting.Dictionary") ; holds the positions for each ao storage
+Global $__storageS_AO_IndexObject = ObjCreate("Scripting.Dictionary") ; holds all free storages
+Global $__storageS_AO_GroupObject = ObjCreate("Scripting.Dictionary") ; holds all groups
+Global $__storageS_AO_Size = 0 ; the current size of the AO storage. Can decrease
+Global $__storageS_ML_Maps = False ; Holds all maps
 
 
-__storageGO_Startup()
+__storageGO_Startup() ; needs to be called first, since other methods are based on GO
 __storageAL_Startup()
 __storageAO_Startup()
 __storageML_Startup()
-;~ __storageS_AntiCE_Startup() ; experimental
-
-
-
-#Region _storageG 		Assign / Eval Method
-; ===============================================================================================================================
-; ===============================================================================================================================
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageG_Overwrite
-; Description ...: Writes data to the Elementname of the Element group
-; Syntax ........: _storageS_Overwrite($vElementGroup, $sElementName, $vElementData)
-; Parameters ....: $vElementGroup           - Element Group
-;                  $sElementName            - (String) Element Name
-;                  $vElementData            - (Variable) Element Data
-; Return values .: True						= If success
-;                : False					= If not
-; Modified ......:
-; Remarks .......: If $vElementData is == False then the Variable is not declared because _storageS_Read() would
-;                : return False then anyway. This is done to prevent the declaration of unnecessary global variables.
-; Example .......: _storageG_Overwrite(123, 'testdata', "hello world")
-; ===============================================================================================================================
-Func _storageG_Overwrite($vElementGroup, $sElementName, $vElementData)
-    Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
-
-    ; we wont declare vars if $vElementData is False because _storageS_Read() always returns False and @error 1 on undeclared vars
-    If $vElementData == False And Not IsDeclared($sVarName) Then Return True
-    If Not IsDeclared($sVarName) Then __storageG_AddGroupVar($vElementGroup, $sElementName)
-
-    Return Assign($sVarName, $vElementData, 2)
-EndFunc   ;==>_storageS_Overwrite
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageG_Append
-; Description ...: Appends data to the Elementname of the Element group
-; Syntax ........: _storageS_Append($vElementGroup, $sElementName, $vElementData)
-; Parameters ....: $vElementGroup           - Element Group
-;                  $sElementName            - (String) Element Name
-;                  $vElementData            - (Variable) Element Data
-; Return values .: True						= If success
-;                : False					= If not
-; Modified ......:
-; Remarks .......: Append as in "Hello " & "World" = "Hello World"
-; Example .......: _storageG_Append(123, 'testdata', "hello world again")
-; ===============================================================================================================================
-Func _storageG_Append($vElementGroup, $sElementName, $vElementData)
-    Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
-
-    If Not IsDeclared($sVarName) Then Return _storageG_Overwrite($vElementGroup, $sElementName, $vElementData)
-
-    Return Assign($sVarName, Eval($sVarName) & $vElementData, 2)
-EndFunc   ;==>_storageS_Append
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageG_Calc
-; Description ...: X operator Y. Where X is what is already stored and Y the $vElementData
-; Syntax ........: _storageG_Calc($vElementGroup, $sElementName, $vElementData, $Operator)
-; Parameters ....: $vElementGroup       - Element Group
-;                  $sElementName        - (String) Element Name
-;                  $vElementData        - (Variable) Element Data aka Y
-;                  $Operator            - (String) + - * / ^ etc.
-;                  $bSwitch             - True / False. Switches X with Y if True.
-;                  $bSave				- True / False. If True will store the result.
-; Return values .: The Result of the Operation
-;                : ""					= if the operation failed
-;                : False				= If the Element is unknown
-; Modified ......:
-; Remarks .......:
-; Example .......: _storageG_Overwrite(123, 'testinteger', 1)
-;                : _storageG_Calc(123, 'testinteger', 2, '+')
-; ===============================================================================================================================
-Func _storageG_Calc($vElementGroup, $sElementName, $vElementData, $Operator, $bSwitch = False, $bSave = True)
-	Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
-
-;~ 	If Not IsDeclared($sVarName) Then Return _storageG_Overwrite($vElementGroup, $sElementName, $vElementData)
-	If Not IsDeclared($sVarName) Then Return False
-
-	if $bSwitch Then
-		Local $vCalc = Execute("$vElementData" & $Operator & Eval($sVarName))
-	Else
-		Local $vCalc = Execute(Eval($sVarName) & $Operator & "$vElementData")
-	EndIf
-
-	If $bSave Then Assign($sVarName, $vCalc, 2)
-	Return $vCalc
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageG_Execute
-; Description ...: Like Cosinos the stored element. Also works with other Functions.
-; Syntax ........: _storageG_Execute($vElementGroup, $sElementName, $Math)
-; Parameters ....: $vElementGroup       - Element Group
-;                  $sElementName        - (String) Element Name
-;                  $Operation           - (String) Cos Sin Mod Log Exp etc.
-;                  $bSave				- True / False. If True will store the result.
-; Return values .: The Result of the Operation
-;                : ""					= if the operation failed
-;                : False				= If the Element is unknown
-; Modified ......:
-; Remarks .......: CODE EXECUTION VULNERABLE (CE). Please ensure the input and storage data is no code.
-;                :
-;                : Functions like Ceiling() or Floor() also work just like your own Functions.
-; Example .......: _storageG_Overwrite(123, 'testinteger', 3)
-;                : _storageG_Execute(123, 'testinteger, "Cos")
-;                : Or _storageG_Execute(123, 'testinteger, "_MyMathFunc")
-; ===============================================================================================================================
-Func _storageG_Execute($vElementGroup, $sElementName, $Operation, $bSave = True)
-	Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
-
-	If Not IsDeclared($sVarName) Then Return False
-
-	Local $vCalc = Execute($Operation & "(" & Eval($sVarName) & ")")
-
-	If $bSave Then Assign($sVarName, $vCalc)
-	Return $vCalc
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageG_Read
-; Description ...: Returns the data for the element name of the element group
-; Syntax ........: _storageS_Read($vElementGroup, $sElementName)
-; Parameters ....: $vElementGroup           - Element Group
-;                  $sElementName            - (String) Element Name
-; Return values .: The data					= If success
-; Errors ........: 1						- If the variable isnt present.
-; Modified ......:
-; Remarks .......: If _storageG_Overwrite() was called with data that was Bool False then the variable wasnt declared.
-; Example .......: _storageG_Read(123, 'testdata')
-; ===============================================================================================================================
-Func _storageG_Read($vElementGroup, $sElementName)
-    Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
-
-    If Not IsDeclared($sVarName) Then Return SetError(1, 0, False)
-    Return Eval($sVarName)
-EndFunc   ;==>_storageS_Read
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageG_TidyGroupVars
-; Description ...: Tidies all Variables of the given element group
-; Syntax ........: _storageS_TidyGroupVars($vElementGroup)
-; Parameters ....: $vElementGroup           - Element Group
-; Return values .: None
-; Modified ......:
-; Remarks .......: The global variables keep existent, but they are overwritten with Null.
-;                : Because there is no way to delete Global variables.
-; Example .......: _storageG_TidyGroupVars(123)
-; ===============================================================================================================================
-Func _storageG_TidyGroupVars($vElementGroup)
-    Local $oGroupVars = Eval("StorageS" & $vElementGroup)
-    If Not IsObj($oGroupVars) Then Return
-
-	Local $sVarName = "__storageS_" & $vElementGroup
-
-	For $i In $oGroupVars
-		Assign($sVarName & $i, Null, 2)
-	Next
-EndFunc   ;==>_storageS_TidyGroupVars
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageG_DestroyGroup
-; Description ...: Tidies the Group variables and then Destroys the Group Object
-; Syntax ........: _storageG_DestroyGroup($vElementGroup)
-; Parameters ....: $vElementGroup       - a variant value.
-; Return values .: None
-; Modified ......:
-; Remarks .......: The Variables stay declared, but if they are to be never used again then you can also
-;                : destroy the Object that they are stored in to free the ram.
-;                : If you do however use them again then they will not be readded because only undeclared variables are added.
-;                : Using IsDeclared() is simply much faster then using Eval().
-; Example .......: No
-; ===============================================================================================================================
-Func _storageG_DestroyGroup($vElementGroup)
-
-	_storageG_TidyGroupVars($vElementGroup)
-	Assign("StorageS" & $vElementGroup, Null, 2)
-
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageG_GetGroupVars
-; Description ...: Returns a 2D array of size [n][3] containing the elements stored for the Element group
-; Syntax ........: _storageG_GetGroupVars($vElementGroup)
-; Parameters ....: $vElementGroup           - Element Group
-; Return values .: 2D array					= If success
-;                : False					= If not
-; Modified ......:
-; Remarks .......: Array looks like this
-;                : [n][0]					= Element name
-;                : [n][1]					= Element Variable Type
-;                : [n][2]					= Element Variable Data
-; Example .......: _storageG_GetGroupVars(123)
-; ===============================================================================================================================
-Func _storageG_GetGroupVars($vElementGroup)
-
-	Local $oElementGroup = Eval("StorageS" & $vElementGroup)
-	If Not IsObj($oElementGroup) Then Return False
-
-	$vElementGroup = '__storageS_' & $vElementGroup
-
-	Local $arGroupVars2D[$oElementGroup.Count][3], $nCount = 0
-	For $i In $oElementGroup
-		$arGroupVars2D[$nCount][0] = $i
-		$arGroupVars2D[$nCount][1] = VarGetType(Eval($vElementGroup & $i))
-		$arGroupVars2D[$nCount][2] = Eval($vElementGroup & $i)
-		$nCount += 1
-	Next
-
-	Return $arGroupVars2D
-
-EndFunc
+__storageS_AntiCE_Startup()
 #EndRegion
 
+
+#cs
+	You can use CTRL + J to go quickly to a method within SciTE
+
+	Standard Data
+		_storageGO_CreateGroup()
+
+		Specialized
+			_storageG_Overwrite()
+			_storageAO_CreateGroup()
+			_storageO_CreateGroup()
+
+		Experimental
+			_storageGM_CreateGroup()
+
+
+	Standard List
+		_storageOL_CreateGroup()
+
+		Specialized
+			_storageML_CreateGroup()
+			_storageAL_CreateGroup()
+			_storageALR_AddElement()
+			_storageGL_AddElement()
+			_storageGLx_AddElement()
+
+		Experimental
+			_storageOLi_CreateGroup()
+			_storageOLx_CreateGroup()
+			_storageMLx_CreateGroup()
+
+
+	Standard Ring Buffer
+		_storageRBr_CreateGroup()
+		_storageRBx_Init()
+
+		Experimental
+			_storageRBs_CreateGroup()
+
+
+	Miscellaneous Functions
+		_storageS_GetVarSize()
+		_storageS_AntiCECheck()
+		_storageS_AntiCEAdd()
+
+
+	Note _
+
+	Some storage methods have derivations of them that are usually indicated with a lower char at the end.
+	Their code is usually much different and exists to either generally enhance a method or to enhance
+	just a specific field.
+#ce
+
+; ===============================================================================================================================
+#Region Standard Methods
+; ==================================================================
+; Data Storages
+#cs
+	Standard Data storages are storages that are fast with any kind of data. From any type
+	to any size. And these storages do not suffer from the amount of storages that might exist
+	at a time. Another criteria is that they provide support for a long runtime.
+#ce
 
 #Region _storageGO		Reuse Assign / Eval Method
 ; ===============================================================================================================================
 ; ===============================================================================================================================
+#cs
+	_storageGO describtion
+
+	You can use GO if you are constantly creating new storages and remove old. Each new storage reuses a old. Entirely new
+	storages are only created when no old are available.
+
+	Works on top of Global variables. Variables seem to profit from Copy on Write in Autoit. Meaning that
+	storages with the exact same data are often only put once into memory. Resulting in not just less memory being used
+	but the writes being also faster.
+#ce
 ; #FUNCTION# ====================================================================================================================
 ; Name ..........: _storageGO_CreateGroup
 ; Description ...: Creates the Group. Needs to be called.
@@ -11146,9 +11007,661 @@ EndFunc
 #EndRegion
 
 
+; ==================================================================
+; Listing Storages
+#cs
+	Standard Listing storages are storages that are fast with any kind of data. Those lists
+	are good allrounders. They are not the best in a single field but work at decent speeds for
+	any usecase.
+#ce
+
+#Region _storageOL		DictObj List method
+; ===============================================================================================================================
+; ===============================================================================================================================
+#cs
+	_storageOL describtion
+
+	Fastest Add and Remove Element method (not counting ALRapid or GLx)
+	Very good allrounder and usually the goto for all sorts of element lists.
+#ce
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageOL_CreateGroup
+; Description ...: Creates a dictobj list under the given groupname
+; Syntax ........: _storageOL_CreateGroup($vElementGroup)
+; Parameters ....: $vElementGroup       - Element Group
+; Return values .: True					= If success
+;                : False				= If the group already exists
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageOL_CreateGroup($vElementGroup)
+
+	; numbers dont work and converting the numer to String() often doesnt too.
+	; so we add a char in front to make sure that the dict wont have any issues with the name
+	$vElementGroup = 'g' & $vElementGroup
+
+	; if the group already exists then return False
+	if $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return False
+
+	Local $oElementGroup = ObjCreate("Scripting.Dictionary")
+	$__storageS_OL_Dictionaries($vElementGroup) = $oElementGroup
+
+	Return True
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageOL_AddElement
+; Description ...: Adds a element to the dictobj
+; Syntax ........: _storageOL_AddElement($vElementGroup, $sElementName)
+; Parameters ....: $vElementGroup       - Element Group
+;                  $sElementName        - Element Name
+; Return values .: True					= If success
+;                : False				= If not
+; Errors ........: 1					- The elementgroup is unknown
+;                : 2					- The elementname is already added to the list
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageOL_AddElement($vElementGroup, $sElementName)
+	$vElementGroup = 'g' & $vElementGroup
+
+	; if the elementgroup is unknown then return false
+	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return SetError(1, 0, False)
+	Local $oElementGroup = $__storageS_OL_Dictionaries($vElementGroup)
+
+	$sElementName = 'g' & $sElementName
+
+	; if the element is already present then return false
+	if $oElementGroup.Exists($sElementName) Then Return SetError(2, 0, False)
+
+	; add the element
+	$oElementGroup($sElementName)
+	$__storageS_OL_Dictionaries($vElementGroup) = $oElementGroup
+
+	Return True
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageOL_GetElements
+; Description ...: Returns all existing elements in the given groupname in a 1D Array
+; Syntax ........: _storageOL_GetElements($vElementGroup)
+; Parameters ....: $vElementGroup       - Element Group
+;                : $bDict				- If True returns the raw dictionary (read remarks)
+; Return values .: False				= If the elementgroup is unknown
+;                : 1D Array				= Containing all elements, starting at [0]
+; Modified ......:
+; Remarks .......: If the raw dictionary is returned then beaware that each item has an extra character saved to it.
+;                : if you added element "test" then it will be "gtest". This first char is added to make the dictionary
+;                : compatible with numbers.
+; Example .......: No
+; ===============================================================================================================================
+Func _storageOL_GetElements($vElementGroup, $bDict = False)
+	$vElementGroup = 'g' & $vElementGroup
+
+	; if the elementgroup is unknown then return false
+	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return False
+	Local $oElementGroup = $__storageS_OL_Dictionaries($vElementGroup)
+
+	If $bDict Then Return $oElementGroup
+
+	Local $arGroupVars[$oElementGroup.Count], $nCount = 0
+	For $i In $oElementGroup
+		$arGroupVars[$nCount] = StringTrimLeft($i, 1)
+		$nCount += 1
+	Next
+
+	Return $arGroupVars
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageOL_Exists
+; Description ...: Checks if the given element exists in the given element group
+; Syntax ........: _storageOL_Exists($vElementGroup, $sElementName)
+; Parameters ....: $vElementGroup       - Element Group
+;                  $sElementName        - Element Name
+; Return values .: True					= Element exists
+;                : False				= Element does not exists
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageOL_Exists($vElementGroup, $sElementName)
+	$vElementGroup = 'g' & $vElementGroup
+
+	; if the elementgroup is unknown then return false
+	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return SetError(1, 0, False)
+	Local $oElementGroup = $__storageS_OL_Dictionaries($vElementGroup)
+
+	$sElementName = 'g' & $sElementName
+
+	Return $oElementGroup.Exists($sElementName)
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageOL_RemoveElement
+; Description ...: Removes the given element from the given element group
+; Syntax ........: _storageOL_RemoveElement($vElementGroup, $sElementName)
+; Parameters ....: $vElementGroup       - Element Group
+;                  $sElementName        - Element Name
+; Return values .: True					= If success
+;                : False				= If not
+; Errors ........: 1					- elementgroup is unknown
+;                : 2					- element not part of the group
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageOL_RemoveElement($vElementGroup, $sElementName)
+	$vElementGroup = 'g' & $vElementGroup
+
+	; if the elementgroup is unknown then return false
+	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return SetError(1, 0, False)
+	Local $oElementGroup = $__storageS_OL_Dictionaries($vElementGroup)
+
+	$sElementName = 'g' & $sElementName
+
+	If Not $oElementGroup.Exists($sElementName) Then Return SetError(2, 0, False)
+
+	$oElementGroup.Remove($sElementName)
+	$__storageS_OL_Dictionaries($vElementGroup) = $oElementGroup
+
+	Return True
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageOL_DestroyGroup
+; Description ...: Destroys the whole group and its contents
+; Syntax ........: _storageOL_DestroyGroup($vElementGroup)
+; Parameters ....: $vElementGroup       - Element Group
+; Return values .: True					= If success
+;                : False				= If the elementgroup is unknown
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageOL_DestroyGroup($vElementGroup)
+	$vElementGroup = 'g' & $vElementGroup
+
+	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return False
+
+	$__storageS_OL_Dictionaries.Remove($vElementGroup)
+	Return True
+EndFunc
+#EndRegion
+
+
+; ==================================================================
+; Ring Buffer Storages
+#cs
+	https://en.wikipedia.org/wiki/Circular_buffer
+#ce
+
+#Region _storageRBr		Multi Return Ring Buffer (lossy)
+; ===============================================================================================================================
+; ===============================================================================================================================
+#cs
+	_storageRBr describtion
+
+	https://en.wikipedia.org/wiki/Circular_buffer
+
+	Does not store the buffer, but instead returns it.
+#ce
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageRBr_CreateGroup
+; Description ...: Creates a Ring buffer and returns it
+; Syntax ........: _storageRBr_CreateGroup($nRingElementCount)
+; Parameters ....: $nRingElementCount   - Element count
+; Return values .: Array
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageRBr_CreateGroup($nRingElementCount)
+
+	Local $arRingBuffer[$nRingElementCount + 2]
+	$arRingBuffer[0] = 2 ; WritePos
+	$arRingBuffer[1] = 2 ; ReadPos
+
+	Return $arRingBuffer
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageRBr_Add
+; Description ...: Adds an Element to the given Ring Buffer
+; Syntax ........: _storageRBr_Add(Byref $arRingBuffer, $vElementData)
+; Parameters ....: $arRingBuffer        - [in/out] The Ring Buffer
+;                  $vElementData        - Data of any kind
+; Return values .: None
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageRBr_Add(ByRef $arRingBuffer, $vElementData)
+
+	If UBound($arRingBuffer) == $arRingBuffer[0] Then $arRingBuffer[0] = 2
+
+	$arRingBuffer[$arRingBuffer[0]] = $vElementData
+	$arRingBuffer[0] += 1
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageRBr_Get
+; Description ...: Returns the oldest data of the given Ring Buffer
+; Syntax ........: _storageRBr_Get(Byref $arRingBuffer)
+; Parameters ....: $arRingBuffer        - [in/out] The Ring Buffer
+; Return values .: The oldest data
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageRBr_Get(ByRef $arRingBuffer)
+
+	If UBound($arRingBuffer) == $arRingBuffer[1] Then $arRingBuffer[1] = 2
+
+	Local $vElementData = $arRingBuffer[$arRingBuffer[1]]
+	if $vElementData == "" Then Return SetError(1, 0, False)
+
+	$arRingBuffer[$arRingBuffer[1]] = ""
+	$arRingBuffer[1] += 1
+
+	Return $vElementData
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageRBr_DestroyGroup
+; Description ...: Destroys the given Ring Buffer
+; Syntax ........: _storageRBr_DestroyGroup(Byref $arRingBuffer)
+; Parameters ....: $arRingBuffer        - [in/out] The Ring Buffer
+; Return values .: None
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageRBr_DestroyGroup(ByRef $arRingBuffer)
+	$arRingBuffer = Null
+EndFunc
+#EndRegion
+
+
+#Region _storageRBx		Single Storage Ring Buffer (lossy)
+; ===============================================================================================================================
+; ===============================================================================================================================
+#cs
+	_storageRBx describtion
+
+	https://en.wikipedia.org/wiki/Circular_buffer
+
+	Single Ring buffer. The ring buffer is stored in a single global.
+#ce
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageRBx_Init
+; Description ...: Initializes the Single Ring Buffer
+; Syntax ........: _storageRBx_Init($nRingElementCount)
+; Parameters ....: $nRingElementCount   - Element count
+; Return values .: True					= If success
+;                : False				= If the ring buffer is already initialized
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageRBx_Init($nRingElementCount)
+
+	If IsArray($__storageS_RBx_Array) Then Return False
+
+	Local $arRingBuffer[$nRingElementCount]
+	$__storageS_RBx_Array = $arRingBuffer
+	$__storageS_RBx_ReadPos = 0
+	$__storageS_RBx_WritePos = 0
+
+	Return True
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageRBx_Add
+; Description ...: Adds a Element to the Single Ring buffer
+; Syntax ........: _storageRBx_Add($vElementData)
+; Parameters ....: $vElementData        - Data of any kind
+; Return values .: True					= If success
+;                : False				= If the Single Buffer isnt initialized
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageRBx_Add($vElementData)
+
+	If Not IsArray($__storageS_RBx_Array) Then Return False
+
+	If UBound($__storageS_RBx_Array) == $__storageS_RBx_WritePos Then $__storageS_RBx_WritePos = 0
+
+	$__storageS_RBx_Array[$__storageS_RBx_WritePos] = $vElementData
+	$__storageS_RBx_WritePos += 1
+
+	Return True
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageRBx_Get
+; Description ...: Returns the oldest data of the Single Ring buffer
+; Syntax ........: _storageRBx_Get()
+; Parameters ....: None
+; Return values .: The oldest Data
+;                : False				= if not possible
+; Errors ........: 1					- If the Single Buffer isnt initialized
+;                : 2					- If there is no Element in the Ring Buffer
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageRBx_Get()
+
+	If Not IsArray($__storageS_RBx_Array) Then Return SetError(1, 0, False)
+
+	If UBound($__storageS_RBx_Array) == $__storageS_RBx_ReadPos Then $__storageS_RBx_ReadPos = 0
+
+	Local $vElementData = $__storageS_RBx_Array[$__storageS_RBx_ReadPos]
+	If $vElementData == "" Then Return SetError(2, 0, False)
+
+	$__storageS_RBx_Array[$__storageS_RBx_ReadPos] = ""
+	$__storageS_RBx_ReadPos += 1
+
+	Return $vElementData
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageRBx_Destroy
+; Description ...: Destroys the Single Ring buffer
+; Syntax ........: _storageRBx_Destroy()
+; Parameters ....: None
+; Return values .: None
+; Modified ......:
+; Remarks .......: Ring buffer can be reinitialized
+; Example .......: No
+; ===============================================================================================================================
+Func _storageRBx_Destroy()
+
+	$__storageS_RBx_Array = False
+	$__storageS_RBx_ReadPos = False
+	$__storageS_RBx_WritePos = False
+
+EndFunc
+#EndRegion
+
+#EndRegion
+
+
+; ===============================================================================================================================
+#Region Specialized Methods
+; ==================================================================
+; Data Storages
+#cs
+	Specialized Data storages are storages that are either good in just one or in multiple
+	fields, and suffer in the rest. You could choose a specialized method to optimise your entire or a part
+	of your script.
+#ce
+
+#Region _storageG 		Assign / Eval Method
+; ===============================================================================================================================
+; ===============================================================================================================================
+#cs
+	_storageG Description
+
+	- Fastest Data storage
+	- 5 GB of data can be written in 15 ms and read in 3 ms
+	- Profits from, what seems like, Copy on Write
+	- Gets faster once the storage exists
+	- Not good for a long runtime if you constantly create new storages, no matter if you remove old.
+	  If you do choose to use this method then reuse the same storages.
+	- Each Removed Storage is a memory leak !
+
+#ce
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Overwrite
+; Description ...: Writes data to the Elementname of the Element group
+; Syntax ........: _storageS_Overwrite($vElementGroup, $sElementName, $vElementData)
+; Parameters ....: $vElementGroup           - Element Group
+;                  $sElementName            - (String) Element Name
+;                  $vElementData            - (Variable) Element Data
+; Return values .: True						= If success
+;                : False					= If not
+; Modified ......:
+; Remarks .......: If $vElementData is == False then the Variable is not declared because _storageS_Read() would
+;                : return False then anyway. This is done to prevent the declaration of unnecessary global variables.
+; Example .......: _storageG_Overwrite(123, 'testdata', "hello world")
+; ===============================================================================================================================
+Func _storageG_Overwrite($vElementGroup, $sElementName, $vElementData)
+    Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
+
+    ; we wont declare vars if $vElementData is False because _storageS_Read() always returns False and @error 1 on undeclared vars
+    If $vElementData == False And Not IsDeclared($sVarName) Then Return True
+    If Not IsDeclared($sVarName) Then __storageG_AddGroupVar($vElementGroup, $sElementName)
+
+    Return Assign($sVarName, $vElementData, 2)
+EndFunc   ;==>_storageS_Overwrite
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Append
+; Description ...: Appends data to the Elementname of the Element group
+; Syntax ........: _storageS_Append($vElementGroup, $sElementName, $vElementData)
+; Parameters ....: $vElementGroup           - Element Group
+;                  $sElementName            - (String) Element Name
+;                  $vElementData            - (Variable) Element Data
+; Return values .: True						= If success
+;                : False					= If not
+; Modified ......:
+; Remarks .......: Append as in "Hello " & "World" = "Hello World"
+; Example .......: _storageG_Append(123, 'testdata', "hello world again")
+; ===============================================================================================================================
+Func _storageG_Append($vElementGroup, $sElementName, $vElementData)
+    Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
+
+    If Not IsDeclared($sVarName) Then Return _storageG_Overwrite($vElementGroup, $sElementName, $vElementData)
+
+    Return Assign($sVarName, Eval($sVarName) & $vElementData, 2)
+EndFunc   ;==>_storageS_Append
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Calc
+; Description ...: X operator Y. Where X is what is already stored and Y the $vElementData
+; Syntax ........: _storageG_Calc($vElementGroup, $sElementName, $vElementData, $Operator)
+; Parameters ....: $vElementGroup       - Element Group
+;                  $sElementName        - (String) Element Name
+;                  $vElementData        - (Variable) Element Data aka Y
+;                  $Operator            - (String) + - * / ^ etc.
+;                  $bSwitch             - True / False. Switches X with Y if True.
+;                  $bSave				- True / False. If True will store the result.
+; Return values .: The Result of the Operation
+;                : ""					= if the operation failed
+;                : False				= If the Element is unknown
+; Modified ......:
+; Remarks .......:
+; Example .......: _storageG_Overwrite(123, 'testinteger', 1)
+;                : _storageG_Calc(123, 'testinteger', 2, '+')
+; ===============================================================================================================================
+Func _storageG_Calc($vElementGroup, $sElementName, $vElementData, $Operator, $bSwitch = False, $bSave = True)
+	Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
+
+;~ 	If Not IsDeclared($sVarName) Then Return _storageG_Overwrite($vElementGroup, $sElementName, $vElementData)
+	If Not IsDeclared($sVarName) Then Return False
+
+	if $bSwitch Then
+		Local $vCalc = Execute("$vElementData" & $Operator & Eval($sVarName))
+	Else
+		Local $vCalc = Execute(Eval($sVarName) & $Operator & "$vElementData")
+	EndIf
+
+	If $bSave Then Assign($sVarName, $vCalc, 2)
+	Return $vCalc
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Execute
+; Description ...: Like Cosinos the stored element. Also works with other Functions.
+; Syntax ........: _storageG_Execute($vElementGroup, $sElementName, $Math)
+; Parameters ....: $vElementGroup       - Element Group
+;                  $sElementName        - (String) Element Name
+;                  $Operation           - (String) Cos Sin Mod Log Exp etc.
+;                  $bSave				- True / False. If True will store the result.
+; Return values .: The Result of the Operation
+;                : ""					= if the operation failed
+;                : False				= If the Element is unknown or when error
+; Errors ........: 1					= $Operation String is blacklisted
+; Modified ......:
+; Remarks .......: CODE EXECUTION VULNERABLE (CE). Please ensure the input and storage data is no code.
+;                :
+;                : Functions like Ceiling() or Floor() also work just like your own Functions.
+; Example .......: _storageG_Overwrite(123, 'testinteger', 3)
+;                : _storageG_Execute(123, 'testinteger, "Cos")
+;                : Or _storageG_Execute(123, 'testinteger, "_MyMathFunc")
+; ===============================================================================================================================
+Func _storageG_Execute($vElementGroup, $sElementName, $Operation, $bSave = True)
+	Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
+
+	If Not IsDeclared($sVarName) Then Return False
+
+	If _storageS_AntiCECheck($Operation) Then Return SetError(1, 0, False)
+
+	Local $vCalc = Execute($Operation & "(" & Eval($sVarName) & ")")
+
+	If $bSave Then Assign($sVarName, $vCalc)
+	Return $vCalc
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Read
+; Description ...: Returns the data for the element name of the element group
+; Syntax ........: _storageS_Read($vElementGroup, $sElementName)
+; Parameters ....: $vElementGroup           - Element Group
+;                  $sElementName            - (String) Element Name
+; Return values .: The data					= If success
+; Errors ........: 1						- If the variable isnt present.
+; Modified ......:
+; Remarks .......: If _storageG_Overwrite() was called with data that was Bool False then the variable wasnt declared.
+; Example .......: _storageG_Read(123, 'testdata')
+; ===============================================================================================================================
+Func _storageG_Read($vElementGroup, $sElementName)
+    Local $sVarName = "__storageS_" & $vElementGroup & $sElementName
+
+    If Not IsDeclared($sVarName) Then Return SetError(1, 0, False)
+    Return Eval($sVarName)
+EndFunc   ;==>_storageS_Read
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_TidyGroupVars
+; Description ...: Tidies all Variables of the given element group
+; Syntax ........: _storageS_TidyGroupVars($vElementGroup)
+; Parameters ....: $vElementGroup           - Element Group
+; Return values .: None
+; Modified ......:
+; Remarks .......: The global variables keep existent, but they are overwritten with Null.
+;                : Because there is no way to delete Global variables.
+; Example .......: _storageG_TidyGroupVars(123)
+; ===============================================================================================================================
+Func _storageG_TidyGroupVars($vElementGroup)
+    Local $oGroupVars = Eval("StorageS" & $vElementGroup)
+    If Not IsObj($oGroupVars) Then Return
+
+	Local $sVarName = "__storageS_" & $vElementGroup
+
+	For $i In $oGroupVars
+		Assign($sVarName & $i, Null, 2)
+	Next
+EndFunc   ;==>_storageS_TidyGroupVars
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_DestroyGroup
+; Description ...: Tidies the Group variables and then Destroys the Group Object
+; Syntax ........: _storageG_DestroyGroup($vElementGroup)
+; Parameters ....: $vElementGroup       - a variant value.
+; Return values .: None
+; Modified ......:
+; Remarks .......: The Variables stay declared, but if they are to be never used again then you can also
+;                : destroy the Object that they are stored in to free the ram.
+;                : If you do however use them again then they will not be readded because only undeclared variables are added.
+;                : Using IsDeclared() is simply much faster then using Eval().
+; Example .......: No
+; ===============================================================================================================================
+Func _storageG_DestroyGroup($vElementGroup)
+
+	_storageG_TidyGroupVars($vElementGroup)
+	Assign("StorageS" & $vElementGroup, Null, 2)
+
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_GetGroupVars
+; Description ...: Returns a 2D array of size [n][3] containing the elements stored for the Element group
+; Syntax ........: _storageG_GetGroupVars($vElementGroup)
+; Parameters ....: $vElementGroup           - Element Group
+; Return values .: 2D array					= If success
+;                : False					= If not
+; Modified ......:
+; Remarks .......: Array looks like this
+;                : [n][0]					= Element name
+;                : [n][1]					= Element Variable Type
+;                : [n][2]					= Element Variable Data
+; Example .......: _storageG_GetGroupVars(123)
+; ===============================================================================================================================
+Func _storageG_GetGroupVars($vElementGroup)
+
+	Local $oElementGroup = Eval("StorageS" & $vElementGroup)
+	If Not IsObj($oElementGroup) Then Return False
+
+	$vElementGroup = '__storageS_' & $vElementGroup
+
+	Local $arGroupVars2D[$oElementGroup.Count][3], $nCount = 0
+	For $i In $oElementGroup
+		$arGroupVars2D[$nCount][0] = $i
+		$arGroupVars2D[$nCount][1] = VarGetType(Eval($vElementGroup & $i))
+		$arGroupVars2D[$nCount][2] = Eval($vElementGroup & $i)
+		$nCount += 1
+	Next
+
+	Return $arGroupVars2D
+
+EndFunc
+#EndRegion
+
+
 #Region _storageAO		Reuse Array method
 ; ===============================================================================================================================
 ; ===============================================================================================================================
+#cs
+	_storageAO describtion
+
+	- Fastest Large Data storage. Perfect for data of the size of 3 MB or larger.
+	- Slower on everything below 3 MB.
+	- Uses an Array as a storage
+	- Gets faster once the storage exists
+	- Storage creation is slow when _storageAO_ReDim() is not used.
+	- _storageAO_Shorten() can shorten the entire storage size
+
+#ce
 ; #FUNCTION# ====================================================================================================================
 ; Name ..........: _storageAO_CreateGroup
 ; Description ...: Creates a group
@@ -11596,6 +12109,11 @@ EndFunc
 #Region _storageO		DictObj method
 ; ===============================================================================================================================
 ; ===============================================================================================================================
+#cs
+	_storageO describtion
+
+	~ todo
+#ce
 ; #FUNCTION# ====================================================================================================================
 ; Name ..........: _storageO_CreateGroup
 ; Description ...: Initializes a Storage for the Object variant. Needs to be called for each Element Group
@@ -11792,180 +12310,26 @@ EndFunc
 #EndRegion
 
 
-#Region _storageOL		DictObj List method
-; ===============================================================================================================================
-; ===============================================================================================================================
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageOL_CreateGroup
-; Description ...: Creates a dictobj list under the given groupname
-; Syntax ........: _storageOL_CreateGroup($vElementGroup)
-; Parameters ....: $vElementGroup       - Element Group
-; Return values .: True					= If success
-;                : False				= If the group already exists
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageOL_CreateGroup($vElementGroup)
-
-	; numbers dont work and converting the numer to String() often doesnt too.
-	; so we add a char in front to make sure that the dict wont have any issues with the name
-	$vElementGroup = 'g' & $vElementGroup
-
-	; if the group already exists then return False
-	if $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return False
-
-	Local $oElementGroup = ObjCreate("Scripting.Dictionary")
-	$__storageS_OL_Dictionaries($vElementGroup) = $oElementGroup
-
-	Return True
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageOL_AddElement
-; Description ...: Adds a element to the dictobj
-; Syntax ........: _storageOL_AddElement($vElementGroup, $sElementName)
-; Parameters ....: $vElementGroup       - Element Group
-;                  $sElementName        - Element Name
-; Return values .: True					= If success
-;                : False				= If not
-; Errors ........: 1					- The elementgroup is unknown
-;                : 2					- The elementname is already added to the list
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageOL_AddElement($vElementGroup, $sElementName)
-	$vElementGroup = 'g' & $vElementGroup
-
-	; if the elementgroup is unknown then return false
-	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return SetError(1, 0, False)
-	Local $oElementGroup = $__storageS_OL_Dictionaries($vElementGroup)
-
-	$sElementName = 'g' & $sElementName
-
-	; if the element is already present then return false
-	if $oElementGroup.Exists($sElementName) Then Return SetError(2, 0, False)
-
-	; add the element
-	$oElementGroup($sElementName)
-	$__storageS_OL_Dictionaries($vElementGroup) = $oElementGroup
-
-	Return True
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageOL_GetElements
-; Description ...: Returns all existing elements in the given groupname in a 1D Array
-; Syntax ........: _storageOL_GetElements($vElementGroup)
-; Parameters ....: $vElementGroup       - Element Group
-; Return values .: False				= If the elementgroup is unknown
-;                : 1D Array				= Containing all elements, starting at [0]
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageOL_GetElements($vElementGroup)
-	$vElementGroup = 'g' & $vElementGroup
-
-	; if the elementgroup is unknown then return false
-	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return False
-	Local $oElementGroup = $__storageS_OL_Dictionaries($vElementGroup)
-
-	Local $arGroupVars[$oElementGroup.Count], $nCount = 0
-	For $i In $oElementGroup
-		$arGroupVars[$nCount] = StringTrimLeft($i, 1)
-		$nCount += 1
-	Next
-
-	Return $arGroupVars
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageOL_Exists
-; Description ...: Checks if the given element exists in the given element group
-; Syntax ........: _storageOL_Exists($vElementGroup, $sElementName)
-; Parameters ....: $vElementGroup       - Element Group
-;                  $sElementName        - Element Name
-; Return values .: True					= Element exists
-;                : False				= Element does not exists
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageOL_Exists($vElementGroup, $sElementName)
-	$vElementGroup = 'g' & $vElementGroup
-
-	; if the elementgroup is unknown then return false
-	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return SetError(1, 0, False)
-	Local $oElementGroup = $__storageS_OL_Dictionaries($vElementGroup)
-
-	$sElementName = 'g' & $sElementName
-
-	Return $oElementGroup.Exists($sElementName)
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageOL_RemoveElement
-; Description ...: Removes the given element from the given element group
-; Syntax ........: _storageOL_RemoveElement($vElementGroup, $sElementName)
-; Parameters ....: $vElementGroup       - Element Group
-;                  $sElementName        - Element Name
-; Return values .: True					= If success
-;                : False				= If not
-; Errors ........: 1					- elementgroup is unknown
-;                : 2					- element not part of the group
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageOL_RemoveElement($vElementGroup, $sElementName)
-	$vElementGroup = 'g' & $vElementGroup
-
-	; if the elementgroup is unknown then return false
-	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return SetError(1, 0, False)
-	Local $oElementGroup = $__storageS_OL_Dictionaries($vElementGroup)
-
-	$sElementName = 'g' & $sElementName
-
-	If Not $oElementGroup.Exists($sElementName) Then Return SetError(2, 0, False)
-
-	$oElementGroup.Remove($sElementName)
-	$__storageS_OL_Dictionaries($vElementGroup) = $oElementGroup
-
-	Return True
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageOL_DestroyGroup
-; Description ...: Destroys the whole group and its contents
-; Syntax ........: _storageOL_DestroyGroup($vElementGroup)
-; Parameters ....: $vElementGroup       - Element Group
-; Return values .: True					= If success
-;                : False				= If the elementgroup is unknown
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageOL_DestroyGroup($vElementGroup)
-	$vElementGroup = 'g' & $vElementGroup
-
-	If Not $__storageS_OL_Dictionaries.Exists($vElementGroup) Then Return False
-
-	$__storageS_OL_Dictionaries.Remove($vElementGroup)
-	Return True
-EndFunc
-#EndRegion
-
+; ==================================================================
+; Listing Storages
+#cs
+	Specialized Listing storages are storages that are either good in just one or in multiple fields,
+	and that suffer in the rest. You could choose a specialized method to optimise your entire or a part
+	of your script.
+#ce
 
 #Region _storageML 		Map List Method
 ; ===============================================================================================================================
 ; ===============================================================================================================================
+#cs
+	_storageML describtion
+
+	Fastest Element Exists method.
+	Gets exceptionally slow on large lists. Adding 10.000 Elements take 90 seconds.
+
+	If your lists are never of that size and you need to check very often if a element in that, somewhat static, list exists
+	then this is your goto.
+#ce
 ; #FUNCTION# ====================================================================================================================
 ; Name ..........: _storageML_CreateGroup
 ; Description ...: Creates a group with the given group name
@@ -12026,11 +12390,12 @@ EndFunc
 ; Remarks .......:
 ; Example .......: No
 ; ===============================================================================================================================
-Func _storageML_GetElements($vElementGroup)
+Func _storageML_GetElements($vElementGroup, $bMap = False)
 
 	If Not MapExists($__storageS_ML_Maps, $vElementGroup) Then Return False
 	Local $mElementGroup = $__storageS_ML_Maps[$vElementGroup]
 
+	If $bMap Then Return $mElementGroup
 	Return MapKeys($mElementGroup)
 
 EndFunc
@@ -12107,6 +12472,14 @@ EndFunc
 #Region _storageAL		Array List method
 ; ===============================================================================================================================
 ; ===============================================================================================================================
+#cs
+	_storageAL describtion
+
+	Fastest GetElements method.
+	This is an Array list, stored in GO. Good for when you often need to iterate through lists.
+
+	Very slow when adding elements without the help of ALRapid.
+#ce
 ; #FUNCTION# ====================================================================================================================
 ; Name ..........: _storageAL_CreateGroup
 ; Description ...: Creates a Element Group
@@ -12122,8 +12495,8 @@ Func _storageAL_CreateGroup($vElementGroup)
 
 	If IsArray(_storageGO_Read('_storageAL', $vElementGroup)) Then Return False
 
-	Local $arElemenGroup[0]
-	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElemenGroup)
+	Local $arElementGroup[0]
+	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElementGroup)
 
 EndFunc
 
@@ -12188,11 +12561,11 @@ EndFunc
 ; ===============================================================================================================================
 Func _storageAL_Exists($vElementGroup, $sElementName)
 
-	Local $arElemenGroup = _storageGO_Read('_storageAL', $vElementGroup)
-	If Not IsArray($arElemenGroup) Then Return SetError(1, 0, False)
+	Local $arElementGroup = _storageGO_Read('_storageAL', $vElementGroup)
+	If Not IsArray($arElementGroup) Then Return SetError(1, 0, False)
 
-	For $i = 0 To UBound($arElemenGroup) - 1
-		if $arElemenGroup[$i] == $sElementName Then Return True
+	For $i = 0 To UBound($arElementGroup) - 1
+		if $arElementGroup[$i] == $sElementName Then Return True
 	Next
 
 	Return False
@@ -12215,12 +12588,12 @@ EndFunc
 ; ===============================================================================================================================
 Func _storageAL_RemoveElement($vElementGroup, $sElementName)
 
-	Local $arElemenGroup = _storageGO_Read('_storageAL', $vElementGroup)
-	If Not IsArray($arElemenGroup) Then Return SetError(1, 0, False)
+	Local $arElementGroup = _storageGO_Read('_storageAL', $vElementGroup)
+	If Not IsArray($arElementGroup) Then Return SetError(1, 0, False)
 
-	Local $nArSize = UBound($arElemenGroup) - 1, $nIndex = -1
+	Local $nArSize = UBound($arElementGroup) - 1, $nIndex = -1
 	For $i = 0 To $nArSize
-		If $arElemenGroup[$i] == $sElementName Then
+		If $arElementGroup[$i] == $sElementName Then
 			$nIndex = $i
 			ExitLoop
 		EndIf
@@ -12228,10 +12601,10 @@ Func _storageAL_RemoveElement($vElementGroup, $sElementName)
 
 	If $nIndex == -1 Then Return SetError(2, 9, False)
 
-	$arElemenGroup[$nIndex] = $arElemenGroup[$nArSize]
-	ReDim $arElemenGroup[$nArSize]
+	$arElementGroup[$nIndex] = $arElementGroup[$nArSize]
+	ReDim $arElementGroup[$nArSize]
 
-	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElemenGroup)
+	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElementGroup)
 
 EndFunc
 
@@ -12249,8 +12622,8 @@ EndFunc
 ; ===============================================================================================================================
 Func _storageAL_DestroyGroup($vElementGroup)
 
-	Local $arElemenGroup = _storageGO_Read('_storageAL', $vElementGroup)
-	If Not IsArray($arElemenGroup) Then Return False
+	Local $arElementGroup = _storageGO_Read('_storageAL', $vElementGroup)
+	If Not IsArray($arElementGroup) Then Return False
 
 	Return _storageGO_DestroyVar('_storageAL', $vElementGroup)
 
@@ -12261,6 +12634,15 @@ EndFunc
 #Region _storageALR		Array List Rapid Add
 ; ===============================================================================================================================
 ; ===============================================================================================================================
+#cs
+	_storageALR (ALRapid) describtion
+
+	This is an extention for _storageAL, which is made to fasten the element additions.
+	Fastest Add Elements method (faster then GLx).
+
+	The ALRapid array needs to be destroyed after it got converted to an AL array.
+	This isnt happening byitself, duo to you maybe wanting to create multiple AL storages with the same elements.
+#ce
 ; #FUNCTION# ====================================================================================================================
 ; Name ..........: _storageALR_AddElement
 ; Description ...: Adds a Element
@@ -12297,10 +12679,10 @@ Func _storageALR_ConvertToAL($vElementGroup)
 
 	If IsArray(_storageGO_Read('_storageAL', $vElementGroup)) Then Return False
 
-	Local $arElemenGroup = $__storageS_ALR_Array
-	ReDim $arElemenGroup[$__storageS_ALR_Index]
+	Local $arElementGroup = $__storageS_ALR_Array
+	ReDim $arElementGroup[$__storageS_ALR_Index]
 
-	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElemenGroup)
+	Return _storageGO_Overwrite('_storageAL', $vElementGroup, $arElementGroup)
 
 EndFunc
 
@@ -12317,98 +12699,10 @@ EndFunc
 ; ===============================================================================================================================
 Func _storageALR_Destroy()
 
-	Local $arElemenGroup[1e6]
-	$__storageS_ALR_Array = $arElemenGroup
+	Local $arElementGroup[1e6]
+	$__storageS_ALR_Array = $arElementGroup
 	$__storageS_ALR_Index = 0
 
-EndFunc
-#EndRegion
-
-
-#Region _storageGL		Assign/Eval List
-; ===============================================================================================================================
-; ===============================================================================================================================
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageGL_AddElement
-; Description ...: Adds an Element to the List
-; Syntax ........: _storageGL_AddElement($vElementGroup, $sElementName)
-; Parameters ....: $vElementGroup       - a variant value.
-;                  $sElementName        - a string value.
-; Return values .: True
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageGL_AddElement($vElementGroup, $sElementName)
-	Return _storageG_Overwrite($vElementGroup, StringToBinary($sElementName), True)
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageGL_GetElements
-; Description ...: Returns all Elements of the List
-; Syntax ........: _storageGL_GetElements($vElementGroup)
-; Parameters ....: $vElementGroup       - a variant value.
-; Return values .: None
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageGL_GetElements($vElementGroup)
-	Local $oElementGroup = Eval("StorageS" & $vElementGroup)
-	If Not IsObj($oElementGroup) Then Return False
-
-	$vElementGroup = '__storageS_' & $vElementGroup
-
-	Local $arGroupVars2D[$oElementGroup.Count], $nCount = 0
-	For $i In $oElementGroup
-		$arGroupVars2D[$nCount] = BinaryToString($i)
-		$nCount += 1
-	Next
-
-	Return $arGroupVars2D
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageGL_Exists
-; Description ...: Checks if an element exists in the list
-; Syntax ........: _storageGL_Exists($vElementGroup, $sElementName)
-; Parameters ....: $vElementGroup       - a variant value.
-;                  $sElementName        - a string value.
-; Return values .: None
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageGL_Exists($vElementGroup, $sElementName)
-	Return _storageG_Read($vElementGroup, StringToBinary($sElementName))
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageGL_RemoveElement
-; Description ...: Removes an element from the list
-; Syntax ........: _storageGL_RemoveElement($vElementGroup, $sElementName)
-; Parameters ....: $vElementGroup       - a variant value.
-;                  $sElementName        - a string value.
-; Return values .: None
-; Modified ......:
-; Remarks .......: Leaks to memory
-; Example .......: No
-; ===============================================================================================================================
-Func _storageGL_RemoveElement($vElementGroup, $sElementName)
-	Return _storageG_Overwrite($vElementGroup, StringToBinary($sElementName), False)
-EndFunc
-
-
-Func _storageGL_TidyGroupVars($vElementGroup)
-	Return _storageG_TidyGroupVars($vElementGroup)
-EndFunc
-
-
-Func _storageGL_DestroyGroup($vElementGroup)
-	Return _storageG_DestroyGroup($vElementGroup)
 EndFunc
 #EndRegion
 
@@ -12416,6 +12710,14 @@ EndFunc
 #Region _storageGLx		Assign/Eval List X
 ; ===============================================================================================================================
 ; ===============================================================================================================================
+#cs
+	_storageGLx describtion
+
+	A method for a very specific use. For huge or static lists where its necessary to check if a element exists.
+	You cannot get the elements in the list.
+
+	Works on top of Globals. Therefore each removed element leaks to memory.
+#ce
 ; #FUNCTION# ====================================================================================================================
 ; Name ..........: _storageGLx_AddElement
 ; Description ...: Adds an Element to the List
@@ -12466,195 +12768,769 @@ EndFunc
 #EndRegion
 
 
-#Region _storageRBr		Multi Return Ring Buffer (lossy)
-; ===============================================================================================================================
-; ===============================================================================================================================
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageRBr_CreateGroup
-; Description ...: Creates a Ring buffer and returns it
-; Syntax ........: _storageRBr_CreateGroup($nRingElementCount)
-; Parameters ....: $nRingElementCount   - Element count
-; Return values .: Array
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageRBr_CreateGroup($nRingElementCount)
+; ==================================================================
+; Ring Buffer Storages
 
-	Local $arRingBuffer[$nRingElementCount + 2]
-	$arRingBuffer[0] = 2 ; WritePos
-	$arRingBuffer[1] = 2 ; ReadPos
+; ~ none
 
-	Return $arRingBuffer
+#EndRegion
+
+
+; ===============================================================================================================================
+#Region Experimental Methods
+; ==================================================================
+; Data Storages
+
+#Region _storageGM		WIP Reuse Assign/Eval based on Maps
+#cs
+	Incomplete and Slow. Do not use.
+
+	Dev notes _
+	Has issues with map limitations. The entire method should not provide more then 1e5 storages.
+	Has issues with large data sets. Even so that it works nearly identical to GO, which would mean that GM should be faster,
+	it isnt on large data sets. It makes no sense that this has anything todo with the map, but what then. Why should
+	assign be faster in GO then in GM, that makes no sense too. What is it then?
+#ce
+Func _storageGM_CreateGroup($vElementGroup)
+
+	If MapExists($__storageS_GM_PosMap, $vElementGroup) Then Return False
+
+	Local $mGroupVars[]
+	__storageGM_Claim($vElementGroup & 'GM', $mGroupVars)
+
+	Return True
+EndFunc
+
+Func _storageGM_Overwrite($vElementGroup, $sElementName, $vElementData)
+
+	Local $sVarName = $vElementGroup & $sElementName
+	Local $nPos = $__storageS_GM_PosMap[$sVarName]
+
+	If Not $nPos Then
+
+		if $vElementData == False Then Return SetError(1, 0, True)
+
+		Execute('__storageS_AssignMap($__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'GM'] & ', $sElementName)')
+
+		__storageGM_Claim($sVarName, $vElementData)
+		Return True
+
+	Else
+
+		Return Assign('__storageGM_' & $nPos, $vElementData, 2)
+
+	EndIf
+
+EndFunc
+
+Func _storageGM_Read($vElementGroup, $sElementName)
+
+	Local $sVarName = $vElementGroup & $sElementName
+	Local $nPos = $__storageS_GM_PosMap[$sVarName]
+
+	If Not $nPos Then Return SetError(1, 0, False)
+
+	Return Eval('__storageGM_' & $nPos)
+
+EndFunc
+
+Func _storageGM_DestroyVar($vElementGroup, $sElementName)
+
+	If Not MapExists(Eval('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'GM']), $sElementName) Then Return False
+
+	Local $sVarName = $vElementGroup & $sElementName
+	Local $nPos = $__storageS_GM_PosMap[$sVarName]
+
+	MapRemove($__storageS_GM_PosMap, $sVarName)
+	$__storageS_GM_IndexMap[$nPos] = Null
+
+	Return Assign('__storageGM_' & $nPos, Null)
+
+EndFunc
+
+Func _storageGM_TidyGroupVars($vElementGroup)
+
+	Local $arGroupVars = MapKeys(Eval('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'GM']))
+
+	For $i = 0 To UBound($arGroupVars) - 1
+
+		Assign('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & $arGroupVars[$i]], Null)
+
+	Next
+
+EndFunc
+
+Func _storageGM_DestroyGroup($vElementGroup)
+
+EndFunc
+
+Func _storageGM_GetClaimedVars()
+
+	Local $arElementGroup = MapKeys($__storageS_GM_PosMap)
+	If UBound($arElementGroup) == 0 Then Return False
+
+	Local $arGroupVars2D[UBound($arElementGroup)][3], $nPos = 0
+	For $i = 0 To UBound($arElementGroup) - 1
+		$arGroupVars2D[$i][0] = $arElementGroup[$i]
+		$arGroupVars2D[$i][2] = Eval('__storageGM_' & $__storageS_GM_PosMap[$arElementGroup[$i]])
+		$arGroupVars2D[$i][1] = VarGetType($arGroupVars2D[$i][2])
+	Next
+
+	Return $arGroupVars2D
 
 EndFunc
 
 
 ; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageRBr_Add
-; Description ...: Adds an Element to the given Ring Buffer
-; Syntax ........: _storageRBr_Add(Byref $arRingBuffer, $vElementData)
-; Parameters ....: $arRingBuffer        - [in/out] The Ring Buffer
-;                  $vElementData        - Data of any kind
+; Name ..........: _storageGM_GetInfo
+; Description ...: Returns various informations of the GM method.
+; Syntax ........: _storageGM_GetInfo($nMode)
+; Parameters ....: $nMode               - (Int) the Mode
+;                : 1					- Returns the amount of existing storages
+;                : 2					- Returns the amount of free storages
+;                : 3					- Returns the amount of claimed storages
+;                : 4					- Returns the Size in Bytes of all claimed storages (CPU intensive)
+; Return values .: The Result			= as Int
+;                : False				= If an invalid option got used
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+; note: i should take into consideration that repeated data isnt put into memory again
+Func _storageGM_GetInfo($nMode)
+
+	Switch $nMode
+
+		Case 1 ; amount of existing storage vars
+			Return $__storageS_GM_Size
+
+		Case 2 ; free storage vars
+;~ 			Return $__storageS_GO_IndexObject.Count
+			Return UBound(MapKeys($__storageS_GM_IndexMap))
+
+		Case 3 ; claimed storage vars
+;~ 			Return $__storageS_GO_PosObject.Count
+			Return UBound(MapKeys($__storageS_GM_PosMap))
+
+		Case 4 ; size of claimes storage vars
+			Local $nSize = 0
+			Local $arElementGroup = MapKeys($__storageS_GM_PosMap)
+			For $i = 0 To UBound($arElementGroup) - 1
+				$nSize += _storageS_GetVarSize(Eval('__storageGM_' & $__storageS_GM_PosMap[$arElementGroup[$i]]))
+			Next
+
+	EndSwitch
+
+EndFunc
+#EndRegion
+
+
+#Region _storageGi		WIP Assign / Eval
+; ===============================================================================================================================
+; ===============================================================================================================================
+#cs
+	_storageGi Description
+
+#ce
+Func _storageGi_CreateGroup($vElementGroup)
+	If IsMap(Eval("StorageGi" & $vElementGroup)) Then Return False
+
+	Local $mGroupVars[]
+	Return Assign("StorageGi" & $vElementGroup, $mGroupVars, 2)
+EndFunc
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Overwrite
+; Description ...: Writes data to the Elementname of the Element group
+; Syntax ........: _storageS_Overwrite($vElementGroup, $sElementName, $vElementData)
+; Parameters ....: $vElementGroup           - Element Group
+;                  $sElementName            - (String) Element Name
+;                  $vElementData            - (Variable) Element Data
+; Return values .: True						= If success
+;                : False					= If not
+; Modified ......:
+; Remarks .......: If $vElementData is == False then the Variable is not declared because _storageS_Read() would
+;                : return False then anyway. This is done to prevent the declaration of unnecessary global variables.
+; Example .......: _storageG_Overwrite(123, 'testdata', "hello world")
+; ===============================================================================================================================
+Func _storageGi_Overwrite($vElementGroup, $sElementName, $vElementData)
+    Local $sVarName = "__storageGi_" & $vElementGroup & $sElementName
+
+    ; we wont declare vars if $vElementData is False because _storageS_Read() always returns False and @error 1 on undeclared vars
+;~     If $vElementData == False And Not IsDeclared($sVarName) Then Return True
+    If Not IsDeclared($sVarName) Then __storageGi_AddGroupVar($vElementGroup, $sElementName)
+
+    Return Assign($sVarName, $vElementData, 2)
+EndFunc   ;==>_storageS_Overwrite
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Append
+; Description ...: Appends data to the Elementname of the Element group
+; Syntax ........: _storageS_Append($vElementGroup, $sElementName, $vElementData)
+; Parameters ....: $vElementGroup           - Element Group
+;                  $sElementName            - (String) Element Name
+;                  $vElementData            - (Variable) Element Data
+; Return values .: True						= If success
+;                : False					= If not
+; Modified ......:
+; Remarks .......: Append as in "Hello " & "World" = "Hello World"
+; Example .......: _storageG_Append(123, 'testdata', "hello world again")
+; ===============================================================================================================================
+Func _storageGi_Append($vElementGroup, $sElementName, $vElementData)
+    Local $sVarName = "__storageGi_" & $vElementGroup & $sElementName
+
+    If Not IsDeclared($sVarName) Then Return _storageGi_Overwrite($vElementGroup, $sElementName, $vElementData)
+
+    Return Assign($sVarName, Eval($sVarName) & $vElementData, 2)
+EndFunc   ;==>_storageS_Append
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Calc
+; Description ...: X operator Y. Where X is what is already stored and Y the $vElementData
+; Syntax ........: _storageG_Calc($vElementGroup, $sElementName, $vElementData, $Operator)
+; Parameters ....: $vElementGroup       - Element Group
+;                  $sElementName        - (String) Element Name
+;                  $vElementData        - (Variable) Element Data aka Y
+;                  $Operator            - (String) + - * / ^ etc.
+;                  $bSwitch             - True / False. Switches X with Y if True.
+;                  $bSave				- True / False. If True will store the result.
+; Return values .: The Result of the Operation
+;                : ""					= if the operation failed
+;                : False				= If the Element is unknown
+; Modified ......:
+; Remarks .......:
+; Example .......: _storageG_Overwrite(123, 'testinteger', 1)
+;                : _storageG_Calc(123, 'testinteger', 2, '+')
+; ===============================================================================================================================
+Func _storageGi_Calc($vElementGroup, $sElementName, $vElementData, $Operator, $bSwitch = False, $bSave = True)
+	Local $sVarName = "__storageGi_" & $vElementGroup & $sElementName
+
+;~ 	If Not IsDeclared($sVarName) Then Return _storageG_Overwrite($vElementGroup, $sElementName, $vElementData)
+	If Not IsDeclared($sVarName) Then Return False
+
+	if $bSwitch Then
+		Local $vCalc = Execute("$vElementData" & $Operator & Eval($sVarName))
+	Else
+		Local $vCalc = Execute(Eval($sVarName) & $Operator & "$vElementData")
+	EndIf
+
+	If $bSave Then Assign($sVarName, $vCalc, 2)
+	Return $vCalc
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Execute
+; Description ...: Like Cosinos the stored element. Also works with other Functions.
+; Syntax ........: _storageG_Execute($vElementGroup, $sElementName, $Math)
+; Parameters ....: $vElementGroup       - Element Group
+;                  $sElementName        - (String) Element Name
+;                  $Operation           - (String) Cos Sin Mod Log Exp etc.
+;                  $bSave				- True / False. If True will store the result.
+; Return values .: The Result of the Operation
+;                : ""					= if the operation failed
+;                : False				= If the Element is unknown or when error
+; Errors ........: 1					= $Operation String is blacklisted
+; Modified ......:
+; Remarks .......: CODE EXECUTION VULNERABLE (CE). Please ensure the input and storage data is no code.
+;                :
+;                : Functions like Ceiling() or Floor() also work just like your own Functions.
+; Example .......: _storageG_Overwrite(123, 'testinteger', 3)
+;                : _storageG_Execute(123, 'testinteger, "Cos")
+;                : Or _storageG_Execute(123, 'testinteger, "_MyMathFunc")
+; ===============================================================================================================================
+Func _storageGi_Execute($vElementGroup, $sElementName, $Operation, $bSave = True)
+	Local $sVarName = "__storageGi_" & $vElementGroup & $sElementName
+
+	If Not IsDeclared($sVarName) Then Return False
+
+	If _storageS_AntiCECheck($Operation) Then Return SetError(1, 0, False)
+
+	Local $vCalc = Execute($Operation & "(" & Eval($sVarName) & ")")
+
+	If $bSave Then Assign($sVarName, $vCalc)
+	Return $vCalc
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_Read
+; Description ...: Returns the data for the element name of the element group
+; Syntax ........: _storageS_Read($vElementGroup, $sElementName)
+; Parameters ....: $vElementGroup           - Element Group
+;                  $sElementName            - (String) Element Name
+; Return values .: The data					= If success
+; Errors ........: 1						- If the variable isnt present.
+; Modified ......:
+; Remarks .......: If _storageG_Overwrite() was called with data that was Bool False then the variable wasnt declared.
+; Example .......: _storageG_Read(123, 'testdata')
+; ===============================================================================================================================
+Func _storageGi_Read($vElementGroup, $sElementName)
+    Local $sVarName = "__storageGi_" & $vElementGroup & $sElementName
+
+;~     If Not IsDeclared($sVarName) Then Return SetError(1, 0, False)
+    Return Eval($sVarName)
+EndFunc   ;==>_storageS_Read
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_TidyGroupVars
+; Description ...: Tidies all Variables of the given element group
+; Syntax ........: _storageS_TidyGroupVars($vElementGroup)
+; Parameters ....: $vElementGroup           - Element Group
 ; Return values .: None
 ; Modified ......:
-; Remarks .......:
+; Remarks .......: The global variables keep existent, but they are overwritten with Null.
+;                : Because there is no way to delete Global variables.
+; Example .......: _storageG_TidyGroupVars(123)
+; ===============================================================================================================================
+Func _storageGi_TidyGroupVars($vElementGroup)
+    Local $mGroupVars = Eval("StorageGi" & $vElementGroup)
+    If Not IsMap($mGroupVars) Then Return
+
+	Local $sVarName = "__storageGi_" & $vElementGroup
+
+	Local $arElementGroup = MapKeys($mGroupVars)
+
+	For $i = 0 To UBound($arElementGroup) - 1
+		Assign($sVarName & $arElementGroup[$i], Null)
+	Next
+EndFunc   ;==>_storageS_TidyGroupVars
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageG_DestroyGroup
+; Description ...: Tidies the Group variables and then Destroys the Group Object
+; Syntax ........: _storageG_DestroyGroup($vElementGroup)
+; Parameters ....: $vElementGroup       - a variant value.
+; Return values .: None
+; Modified ......:
+; Remarks .......: The Variables stay declared, but if they are to be never used again then you can also
+;                : destroy the Object that they are stored in to free the ram.
+;                : If you do however use them again then they will not be readded because only undeclared variables are added.
+;                : Using IsDeclared() is simply much faster then using Eval().
 ; Example .......: No
 ; ===============================================================================================================================
-Func _storageRBr_Add(ByRef $arRingBuffer, $vElementData)
+Func _storageGi_DestroyGroup($vElementGroup)
 
-	If UBound($arRingBuffer) == $arRingBuffer[0] Then $arRingBuffer[0] = 2
-
-	$arRingBuffer[$arRingBuffer[0]] = $vElementData
-	$arRingBuffer[0] += 1
+	_storageGi_TidyGroupVars($vElementGroup)
+	Assign("StorageGi" & $vElementGroup, Null, 2)
 
 EndFunc
 
 
 ; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageRBr_Get
-; Description ...: Returns the oldest data of the given Ring Buffer
-; Syntax ........: _storageRBr_Get(Byref $arRingBuffer)
-; Parameters ....: $arRingBuffer        - [in/out] The Ring Buffer
-; Return values .: The oldest data
+; Name ..........: _storageG_GetGroupVars
+; Description ...: Returns a 2D array of size [n][3] containing the elements stored for the Element group
+; Syntax ........: _storageG_GetGroupVars($vElementGroup)
+; Parameters ....: $vElementGroup           - Element Group
+; Return values .: 2D array					= If success
+;                : False					= If not
 ; Modified ......:
-; Remarks .......:
-; Example .......: No
+; Remarks .......: Array looks like this
+;                : [n][0]					= Element name
+;                : [n][1]					= Element Variable Type
+;                : [n][2]					= Element Variable Data
+; Example .......: _storageG_GetGroupVars(123)
 ; ===============================================================================================================================
-Func _storageRBr_Get(ByRef $arRingBuffer)
+Func _storageGi_GetGroupVars($vElementGroup)
 
-	If UBound($arRingBuffer) == $arRingBuffer[1] Then $arRingBuffer[1] = 2
+	Local $mElementGroup = Eval("StorageGi" & $vElementGroup)
+	If Not IsMap($mElementGroup) Then Return False
 
-	Local $vElementData = $arRingBuffer[$arRingBuffer[1]]
-	if $vElementData == "" Then Return SetError(1, 0, False)
+	$vElementGroup = '__storageGi_' & $vElementGroup
 
-	$arRingBuffer[$arRingBuffer[1]] = ""
-	$arRingBuffer[1] += 1
+	Local $arElementGroup = MapKeys($mElementGroup)
+	Local $arGroupVars2D[UBound($arElementGroup)][3]
+	For $i = 0 To UBound($arElementGroup) - 1
+		$arGroupVars2D[$i][0] = $arElementGroup[$i]
+		$arGroupVars2D[$i][2] = Eval($vElementGroup & $arElementGroup[$i])
+		$arGroupVars2D[$i][1] = VarGetType($arGroupVars2D[$i][2])
+	Next
+
+	Return $arGroupVars2D
+
+EndFunc
+#EndRegion
+
+; ==================================================================
+; Listing Storages
+
+#Region _storageOLi		WIP Experimental Dictionary List Improved
+; ===============================================================================================================================
+; ===============================================================================================================================
+#cs
+	_storageOLi describtion
+
+	Experimental listing method. Which took 7 iterations to make.
+
+	Its a _storageOL derivation sharing storages with _storageGM.
+	Element Lists created within _storageOLi_GetElements() are saved until a next edit of the list is performed.
+
+	Uses Execute() to perform direct GM storage edits which also lead to a scrap storage if the group does not exist.
+	The scrap storage however is not an issue.
+
+	Overall this listing method tries to combine the pros of the two methods and additionally uses experimental technics, to
+	create a OL derivate that is better in all its fields.
+
+	_storageGM suffers from too large maps. If the entire storage size reaches too high sizes then all method based on GM will
+	get slower. _storageGM_GetInfo() can help investigate such issues. 1e5 storages should be the top most limit for GM.
+	Each OLi group takes 2 GM storages.
+
+	Dev notes _
+	Similiar to GM this method will suffer from map limitations (1e5).
+#ce
+Func _storageOLi_CreateGroup($vElementGroup)
+
+	If MapExists($__storageS_GM_PosMap, $vElementGroup) Then Return False
+
+	__storageGM_Claim($vElementGroup, ObjCreate("Scripting.Dictionary"))
+	__storageGM_Claim($vElementGroup & 'A', False)
+
+EndFunc
+
+Func _storageOLi_AddElement($vElementGroup, $sElementName)
+
+	; Execute() can only process expressions. But this here works well and also saves time because
+	; we edit the global var directly instead of copying it to a local first.
+	Execute('$__storageGM_' & $__storageS_GM_PosMap[$vElementGroup] & '("g" & $sElementName)')
+	Return Assign('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'], False)
+
+	; sometimes faster, sometimes not. The results vary alot while the above stays steady
+;~ 	Return Execute('($__storageGM_' & $__storageS_GM_PosMap[$vElementGroup] & '("g" & $sElementName)) ? $__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'] & 'A = False : False')
+
+EndFunc
+
+; the last element need to have the $bLast set to True otherwise _storageOLi_GetElements() might return a wrong array.
+Func _storageOLiRapid_AddElement($vElementGroup, $sElementName, $bLast = False)
+	Execute('$__storageGM_' & $__storageS_GM_PosMap[$vElementGroup] & '("g" & $sElementName)')
+	If $bLast Then Return Assign('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'], False)
+EndFunc
+
+Func _storageOLi_Exists($vElementGroup, $sElementName)
+	Return (Execute('$__storageGM_' & $__storageS_GM_PosMap[$vElementGroup] & '.Exists("g" & $sElementName)')) ? True : False
+EndFunc
+
+Func _storageOLi_GetElements($vElementGroup)
+
+	If Not MapExists($__storageS_GM_PosMap, $vElementGroup) Then Return False
+
+	Local $arElementGroup = Eval('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'])
+	If IsArray($arElementGroup) Then Return $arElementGroup
+
+	Local $oElementGroup = Eval('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup])
+	If Not IsObj($oElementGroup) Then Return False
+
+	Local $arElementGroup[$oElementGroup.Count], $nCount = 0
+	For $i In $oElementGroup
+		$arElementGroup[$nCount] = StringTrimLeft($i, 1)
+		$nCount += 1
+	Next
+
+	Assign('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'], $arElementGroup)
+	Return $arElementGroup
+
+EndFunc
+
+Func _storageOLi_RemoveElement($vElementGroup, $sElementName)
+	Execute('$__storageGM_' & $__storageS_GM_PosMap[$vElementGroup] & '.Remove("g" & $sElementName)')
+	Return Assign('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'], False)
+EndFunc
+
+Func _storageOLi_DestroyGroup($vElementGroup)
+
+	If Not MapExists($__storageS_GM_PosMap, $vElementGroup) Then Return False
+
+	Local $nPos = $__storageS_GM_PosMap[$vElementGroup]
+	If $nPos == "" Then ; scrap storage
+
+		Assign('__storageGM_' & $nPos, Null)
+		Return Assign('__storageGM_' & $nPos & 'A', Null)
+
+	Else
+
+		; tidy
+		Assign('__storageGM_' & $nPos, Null)
+		Assign('__storageGM_' & $nPos & 'A', Null)
+
+		; free
+		MapRemove($__storageS_GM_PosMap, $vElementGroup)
+
+		; add to index
+		$__storageS_GM_IndexMap[$nPos] = Null
+
+		Return True
+
+	EndIf
+
+EndFunc
+#EndRegion
+
+
+#Region _storageOLx		WIP Experimental Dictionary List Extended
+; ===============================================================================================================================
+; ===============================================================================================================================
+#cs
+	_storageOLx describtion
+
+	Experimental listing method.
+
+	Very similiar to OLi, but with the difference that its a combination of _storageGO and OL.
+	Therefore this method is slower then GLi, but it supports larger lists.
+#ce
+Func _storageOLx_CreateGroup($vElementGroup)
+
+	$vElementGroup = 'g' & $vElementGroup
+	If $__storageS_GO_PosObject.Exists($vElementGroup) Then Return False
+
+	__storageGO_Claim($vElementGroup, ObjCreate("Scripting.Dictionary"))
+	__storageGO_Claim($vElementGroup & 'A', False)
+
+EndFunc
+
+Func _storageOLx_AddElement($vElementGroup, $sElementName)
+
+	$vElementGroup = 'g' & $vElementGroup
+
+	; Execute() can only process expressions. But this here works well and also saves time because
+	; we edit the global var directly instead of copying it to a local first.
+	Execute('$__storageGO_' & $__storageS_GO_PosObject($vElementGroup) & '("g" & $sElementName)')
+	Return Assign('__storageGO_' & $__storageS_GO_PosObject($vElementGroup & 'A'), False)
+
+EndFunc
+
+
+Func _storageOLxRapid_AddElement($vElementGroup, $sElementName, $bLast = False)
+
+	$vElementGroup = 'g' & $vElementGroup
+
+	; Execute() can only process expressions. But this here works well and also saves time because
+	; we edit the global var directly instead of copying it to a local first.
+	Execute('$__storageGO_' & $__storageS_GO_PosObject($vElementGroup) & '("g" & $sElementName)')
+	If $bLast Then Return Assign('__storageGO_' & $__storageS_GO_PosObject($vElementGroup & 'A'), False)
+
+EndFunc
+
+Func _storageOLx_Exists($vElementGroup, $sElementName)
+
+	Return (Execute('$__storageGO_' & $__storageS_GO_PosObject('g' & $vElementGroup) & '.Exists("g" & $sElementName)')) ? True : False
+
+EndFunc
+
+Func _storageOLx_GetElements($vElementGroup)
+
+	$vElementGroup = 'g' & $vElementGroup
+	if Not $__storageS_GO_PosObject.Exists($vElementGroup) Then Return False
+
+	Local $arElementGroup = Eval('__storageGO_' & $__storageS_GO_PosObject($vElementGroup & 'A'))
+	If IsArray($arElementGroup) Then Return $arElementGroup
+
+	Local $oElementGroup = Eval('__storageGO_' & $__storageS_GO_PosObject($vElementGroup))
+	If Not IsObj($oElementGroup) Then Return False
+
+	Local $arElementGroup[$oElementGroup.Count], $nCount = 0
+	For $i In $oElementGroup
+		$arElementGroup[$nCount] = StringTrimLeft($i, 1)
+		$nCount += 1
+	Next
+
+	Assign('__storageGO_' & $__storageS_GO_PosObject($vElementGroup & 'A'), $arElementGroup)
+	Return $arElementGroup
+EndFunc
+
+Func _storageOLx_RemoveElement($vElementGroup, $sElementName)
+
+	$vElementGroup = 'g' & $vElementGroup
+	Execute('$__storageGO_' & $__storageS_GO_PosObject($vElementGroup) & '.Remove("g" & $sElementName)')
+	Return Assign('__storageGO_' & $__storageS_GO_PosObject($vElementGroup & 'A'), False)
+
+EndFunc
+
+Func _storageOLx_DestroyGroup($vElementGroup)
+
+	$vElementGroup = 'g' & $vElementGroup
+	if Not $__storageS_GO_PosObject.Exists($vElementGroup) Then Return False
+
+	Local $nPos = $__storageS_GO_PosObject($vElementGroup)
+	If $nPos == "" Then ; scrap storage
+
+		Assign('__storageGO_' & $nPos, Null)
+		Return Assign('__storageGO_' & $nPos & 'A', Null)
+
+	Else
+
+		; tidy
+		Assign('__storageGO_' & $nPos, Null)
+		Assign('__storageGO_' & $nPos & 'A', Null)
+
+		; free
+		$__storageS_GO_PosObject.Remove($vElementGroup)
+
+		; add to index
+		$__storageS_GO_IndexObject($nPos)
+
+		Return True
+
+	EndIf
+
+EndFunc
+#EndRegion
+
+
+#Region _storageMLx		WIP Experimental Map List Extended
+; ===============================================================================================================================
+; ===============================================================================================================================
+#cs
+	_storageMLx describtion
+
+	Its a _storageML derivation sharing storages with _storageGM.
+	Element Lists created within _storageMLx_GetElements() are saved until a next edit of the list is performed.
+
+	Uses Execute() to perform direct GM storage edits which improve the map interactions by alot.
+
+	Overall this listing method tries to combine the pros of the two methods and additionally uses experimental technics, to
+	create a ML derivate that is better in all its fields.
+
+	Dev notes _
+	Similiar to GM this method will suffer from map limitations (1e5)
+#ce
+Func _storageMLx_CreateGroup($vElementGroup)
+	If MapExists($__storageS_GM_PosMap, $vElementGroup) Then Return False
+
+	Local $mElementGroup[]
+	__storageGM_Claim($vElementGroup, $mElementGroup)
+	__storageGM_Claim($vElementGroup & 'A', False)
+
+	Return True
+EndFunc
+
+Func _storageMLx_AddElement($vElementGroup, $sElementName)
+
+	; execute trick. Lets us edit the map storage directly instead of copying it into a local first.
+	Execute('__storageS_AssignMap($__storageGM_' & $__storageS_GM_PosMap[$vElementGroup] & ', $sElementName)')
+	Return Assign('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'], False)
+
+EndFunc
+
+; the last element need to have the $bLast set to True otherwise _storageMLx_GetElements() might return a wrong array.
+Func _storageMLxRapid_AddElement($vElementGroup, $sElementName, $bLast = False)
+	Execute('__storageS_AssignMap($__storageGM_' & $__storageS_GM_PosMap[$vElementGroup] & ', $sElementName)')
+	If $bLast Then Return Assign('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'], False)
+EndFunc
+
+Func _storageMLx_Exists($vElementGroup, $sElementName)
+	Return (MapExists(Eval('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup]), $sElementName)) ? True : False
+EndFunc
+
+Func _storageMLx_GetElements($vElementGroup, $bMap = False)
+	Local $nPos = $__storageS_GM_PosMap[$vElementGroup]
+	If Not $nPos Then Return False
+
+	Local $arElementGroup = Eval('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'])
+	If IsArray($arElementGroup) Then Return $arElementGroup
+
+	If $bMap Then Return Eval('__storageGM_' & $nPos)
+	$arElementGroup = MapKeys(Eval('__storageGM_' & $nPos))
+
+	Assign('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'], $arElementGroup)
+	Return $arElementGroup
+EndFunc
+
+Func _storageMLx_RemoveElement($vElementGroup, $sElementName)
+	Execute('MapRemove($__storageGM_' & $__storageS_GM_PosMap[$vElementGroup] & ', $sElementName)')
+	Assign('__storageGM_' & $__storageS_GM_PosMap[$vElementGroup & 'A'], False)
+EndFunc
+
+Func _storageMLx_DestroyGroup($vElementGroup)
+
+	If Not MapExists($__storageS_GM_PosMap, $vElementGroup) Then Return False
+
+	Local $nPos = $__storageS_GM_PosMap[$vElementGroup]
+	If $nPos == "" Then ; scrap storage
+
+		Assign('__storageGM_' & $nPos, Null)
+		Return Assign('__storageGM_' & $nPos & 'A', Null)
+
+	Else
+
+		; tidy
+		Assign('__storageGM_' & $nPos, Null)
+		Assign('__storageGM_' & $nPos & 'A', Null)
+
+		; free
+		MapRemove($__storageS_GM_PosMap, $vElementGroup)
+
+		; add to index
+		$__storageS_GM_IndexMap[$nPos] = Null
+
+		Return True
+
+	EndIf
+
+EndFunc
+#EndRegion
+
+
+; ==================================================================
+; Ring Buffer Storages
+
+#Region _storageRBs		WIP Multi Storage Ring Buffer (lossy) (needs optimization)
+#cs
+	_storageRBs describtion
+
+	Do not use.
+#ce
+Func _storageRBs_CreateGroup($sRingName, $nRingElementCount)
+
+	$sRingName = '_storageRBs' & $sRingName
+	If Not _storageGO_CreateGroup($sRingName) Then Return False
+
+	Local $arRingBuffer = _storageRBr_CreateGroup($nRingElementCount)
+
+	Return _storageGO_Overwrite($sRingName, 'RingBuffer', $arRingBuffer)
+
+EndFunc
+
+
+Func _storageRBs_Add($sRingName, $vElementData)
+
+	$sRingName = '_storageRBs' & $sRingName
+	Local $arRingBuffer = _storageGO_Read($sRingName, 'RingBuffer')
+	If Not IsArray($arRingBuffer) Then Return False
+
+	_storageRBr_Add($arRingBuffer, $vElementData)
+
+	Return _storageGO_Overwrite($sRingName, 'RingBuffer', $arRingBuffer)
+
+EndFunc
+
+
+Func _storageRBs_Get($sRingName)
+
+	$sRingName = '_storageRBs' & $sRingName
+	Local $arRingBuffer = _storageGO_Read($sRingName, 'RingBuffer')
+	If Not IsArray($arRingBuffer) Then Return False
+
+	Local $vElementData = _storageRBr_Get($arRingBuffer)
+	if @error Then Return SetError(1, 0, False)
+	_storageGO_Overwrite($sRingName, 'RingBuffer', $arRingBuffer)
 
 	Return $vElementData
 
 EndFunc
 
 
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageRBr_DestroyGroup
-; Description ...: Destroys the given Ring Buffer
-; Syntax ........: _storageRBr_DestroyGroup(Byref $arRingBuffer)
-; Parameters ....: $arRingBuffer        - [in/out] The Ring Buffer
-; Return values .: None
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageRBr_DestroyGroup(ByRef $arRingBuffer)
-	$arRingBuffer = Null
+Func _storageRBs_DestroyGroup($sRingName)
+	Return _storageGO_DestroyGroup('_storageRBs' & $sRingName)
 EndFunc
 #EndRegion
 
-
-#Region _storageRBx		Single Storage Ring Buffer (lossy)
-; ===============================================================================================================================
-; ===============================================================================================================================
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageRBx_Init
-; Description ...: Initializes the Single Ring Buffer
-; Syntax ........: _storageRBx_Init($nRingElementCount)
-; Parameters ....: $nRingElementCount   - Element count
-; Return values .: True					= If success
-;                : False				= If the ring buffer is already initialized
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageRBx_Init($nRingElementCount)
-
-	If IsArray($__storageS_RBx_Array) Then Return False
-
-	Local $arRingBuffer[$nRingElementCount]
-	$__storageS_RBx_Array = $arRingBuffer
-	$__storageS_RBx_ReadPos = 0
-	$__storageS_RBx_WritePos = 0
-
-	Return True
-
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageRBx_Add
-; Description ...: Adds a Element to the Single Ring buffer
-; Syntax ........: _storageRBx_Add($vElementData)
-; Parameters ....: $vElementData        - Data of any kind
-; Return values .: True					= If success
-;                : False				= If the Single Buffer isnt initialized
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageRBx_Add($vElementData)
-
-	If Not IsArray($__storageS_RBx_Array) Then Return False
-
-	If UBound($__storageS_RBx_Array) == $__storageS_RBx_WritePos Then $__storageS_RBx_WritePos = 0
-
-	$__storageS_RBx_Array[$__storageS_RBx_WritePos] = $vElementData
-	$__storageS_RBx_WritePos += 1
-
-	Return True
-
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageRBx_Get
-; Description ...: Returns the oldest data of the Single Ring buffer
-; Syntax ........: _storageRBx_Get()
-; Parameters ....: None
-; Return values .: The oldest Data
-;                : False				= if not possible
-; Errors ........: 1					- If the Single Buffer isnt initialized
-;                : 2					- If there is no Element in the Ring Buffer
-; Modified ......:
-; Remarks .......:
-; Example .......: No
-; ===============================================================================================================================
-Func _storageRBx_Get()
-
-	If Not IsArray($__storageS_RBx_Array) Then Return SetError(1, 0, False)
-
-	If UBound($__storageS_RBx_Array) == $__storageS_RBx_ReadPos Then $__storageS_RBx_ReadPos = 0
-
-	Local $vElementData = $__storageS_RBx_Array[$__storageS_RBx_ReadPos]
-	If $vElementData == "" Then Return SetError(2, 0, False)
-
-	$__storageS_RBx_Array[$__storageS_RBx_ReadPos] = ""
-	$__storageS_RBx_ReadPos += 1
-
-	Return $vElementData
-
-EndFunc
-
-
-; #FUNCTION# ====================================================================================================================
-; Name ..........: _storageRBx_Destroy
-; Description ...: Destroys the Single Ring buffer
-; Syntax ........: _storageRBx_Destroy()
-; Parameters ....: None
-; Return values .: None
-; Modified ......:
-; Remarks .......: Ring buffer can be reinitialized
-; Example .......: No
-; ===============================================================================================================================
-Func _storageRBx_Destroy()
-
-	$__storageS_RBx_Array = False
-	$__storageS_RBx_ReadPos = False
-	$__storageS_RBx_WritePos = False
-
-EndFunc
 #EndRegion
 
 
+; ===============================================================================================================================
 #Region Miscellaneous Functions
 ; #FUNCTION# ====================================================================================================================
 ; Name ..........: _storageS_GetVarSize
@@ -12714,59 +13590,40 @@ Func _storageS_GetVarSize($vData)
 
 	EndSwitch
 EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageS_AntiCECheck
+; Description ...: Checks for if the given string is blacklisted for the Execute() functions
+; Syntax ........: _storageS_AntiCECheck($sCheck)
+; Parameters ....: $sCheck              - a string value.
+; Return values .: True / False			= Is blacklisted / Is not
+; Modified ......:
+; Remarks .......: Is automatically used by the execute functions.
+; Example .......: No
+; ===============================================================================================================================
+Func _storageS_AntiCECheck($sCheck)
+	Return _storageGLx_Exists("ANTICE", StringUpper($sCheck))
+EndFunc
+
+
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _storageS_AntiCEAdd
+; Description ...: Adds your own Blacklist items to the default
+; Syntax ........: _storageS_AntiCEAdd($sCheck)
+; Parameters ....: $sCheck              - a string value.
+; Return values .: None
+; Modified ......:
+; Remarks .......:
+; Example .......: No
+; ===============================================================================================================================
+Func _storageS_AntiCEAdd($sCheck)
+	_storageGLx_AddElement("ANTICE", StringUpper($sCheck))
+EndFunc
 #EndRegion
 
 
-; New Methods that require testing and optimization
-; ===============================================================================================================================
-; ===============================================================================================================================
-; ===============================================================================================================================
 
-#Region _storageRBs		WIP Multi Storage Ring Buffer (lossy) (needs optimization)
-Func _storageRBs_CreateGroup($sRingName, $nRingElementCount)
-
-	$sRingName = '_storageRBs' & $sRingName
-	If Not _storageGO_CreateGroup($sRingName) Then Return False
-
-	Local $arRingBuffer = _storageRBr_CreateGroup($nRingElementCount)
-
-	Return _storageGO_Overwrite($sRingName, 'RingBuffer', $arRingBuffer)
-
-EndFunc
-
-
-Func _storageRBs_Add($sRingName, $vElementData)
-
-	$sRingName = '_storageRBs' & $sRingName
-	Local $arRingBuffer = _storageGO_Read($sRingName, 'RingBuffer')
-	If Not IsArray($arRingBuffer) Then Return False
-
-	_storageRBr_Add($arRingBuffer, $vElementData)
-
-	Return _storageGO_Overwrite($sRingName, 'RingBuffer', $arRingBuffer)
-
-EndFunc
-
-
-Func _storageRBs_Get($sRingName)
-
-	$sRingName = '_storageRBs' & $sRingName
-	Local $arRingBuffer = _storageGO_Read($sRingName, 'RingBuffer')
-	If Not IsArray($arRingBuffer) Then Return False
-
-	Local $vElementData = _storageRBr_Get($arRingBuffer)
-	if @error Then Return SetError(1, 0, False)
-	_storageGO_Overwrite($sRingName, 'RingBuffer', $arRingBuffer)
-
-	Return $vElementData
-
-EndFunc
-
-
-Func _storageRBs_DestroyGroup($sRingName)
-	Return _storageGO_DestroyGroup('_storageRBs' & $sRingName)
-EndFunc
-#EndRegion
 
 
 ; Internal Barrier
@@ -12822,10 +13679,21 @@ Func __storageML_Startup()
 
 	Return False
 EndFunc
+
+; uses GLx, sine the blacklist stays persistent for the whole runtime
+Func __storageS_AntiCE_Startup()
+
+	Local $arBlacklistStrings = StringSplit("SHELLEXECUTE;SHELLEXECUTEWAIT;RUN;RUNWAIT;RUNAS;CALL;EXECUTE;ASSIGN;EVAL;INETGET;INETREAD;OBJCREATE", ';', 1)
+
+	For $i = 1 To $arBlacklistStrings[0]
+		_storageGLx_AddElement("ANTICE", $arBlacklistStrings[$i])
+	Next
+
+EndFunc
 #EndRegion
 
 #Region Group Vars
-; the add group var functions cannot be map based. That would render them incompatible with the Autoit Stable.
+; the add group var functions cannot be map based. That would limit their size duo to Maps becoming slower the larger they are.
 Func __storageG_AddGroupVar($vElementGroup, $sElementName)
 	Local $oGroupVars = Eval("StorageS" & $vElementGroup)
 	If IsObj($oGroupVars) == 0 Then
@@ -12834,6 +13702,15 @@ Func __storageG_AddGroupVar($vElementGroup, $sElementName)
 
 	$oGroupVars(String($sElementName))
 	Assign("StorageS" & $vElementGroup, $oGroupVars, 2)
+EndFunc
+
+Func __storageGi_AddGroupVar($vElementGroup, $sElementName)
+;~ 	If Not IsMap(Eval("StorageGi" & $vElementGroup)) Then
+;~ 		Local $mGroupVars[]
+;~ 		Assign("StorageGi" & $vElementGroup, $mGroupVars, 2)
+;~ 	EndIf
+
+	Execute('__storageS_AssignMap($StorageGi' & $vElementGroup & ', $sElementName)')
 EndFunc
 
 Func __storageGO_AddGroupVar($vElementGroup, $sElementName)
@@ -12855,22 +13732,67 @@ Func __storageAO_AddGroupVar($vElementGroup, $sElementName)
 EndFunc
 #EndRegion
 
+#Region Playground
+#EndRegion
 
-
-; uses GLx, sine the blacklist stays persistent for the whole runtime
-Func __storageS_AntiCE_Startup()
-
-	Local $arBlacklistStrings = StringSplit("SHELLEXECUTE;SHELLEXECUTEWAIT;RUN;RUNWAIT;RUNAS;CALL;EXECUTE;ASSIGN;EVAL;INETGET;INETREAD;OBJCREATE", ';', 1)
-
-	For $i = 1 To $arBlacklistStrings[0]
-		_storageGLx_AddElement("ANTICE", $arBlacklistStrings[$i])
-	Next
-
+Func __storageS_AssignMap(ByRef $Var, $Item)
+	$Var[$Item] = Null
 EndFunc
 
-; uses GLx
-Func __storageS_AntiCE($sCheck)
-	$sCheck = StringUpper($sCheck)
-	Return _storageGLx_Exists("ANTICE", $sCheck)
+; required for functions that share go storages
+Func __storageGO_Claim($vElementGroup, $vElementData)
+	If $__storageS_GO_IndexObject.Count == 0 Then
+
+		; increase size
+		$__storageS_GO_Size += 1
+
+		; claim it
+		$__storageS_GO_PosObject($vElementGroup) = $__storageS_GO_Size
+
+		; assign and return
+		Return Assign('__storageGO_' & $__storageS_GO_Size, $vElementData, 2)
+
+	Else ; pick a free storage
+
+		; eh, how do i pick the first element in a dictobj
+		For $i In $__storageS_GO_IndexObject
+			Local $nPos = $i
+			ExitLoop
+		Next
+
+		; claim it
+		$__storageS_GO_IndexObject.Remove($nPos)
+		$__storageS_GO_PosObject($vElementGroup) = $nPos
+
+		; assign data and return
+		Return Assign('__storageGO_' & $nPos, $vElementData, 2)
+
+	EndIf
+EndFunc
+
+; required for functions that share gm storages
+Func __storageGM_Claim($vElementGroup, $vElementData)
+	Local $arIndexMap = MapKeys($__storageS_GM_IndexMap)
+	If UBound($arIndexMap) == 0 Then
+
+		; increase size
+		$__storageS_GM_Size += 1
+
+		; claim pos
+		$__storageS_GM_PosMap[$vElementGroup] = $__storageS_GM_Size
+
+		; assign and return
+		Return Assign('__storageGM_' & $__storageS_GM_Size, $vElementData, 2)
+
+	Else
+
+		; claim pos
+		MapRemove($__storageS_GM_IndexMap, $arIndexMap[0])
+		$__storageS_GM_PosMap[$vElementGroup] = $arIndexMap[0]
+
+		; assign and return
+		Return Assign('__storageGM_' & $arIndexMap[0], $vElementData, 2)
+
+	EndIf
 EndFunc
 
